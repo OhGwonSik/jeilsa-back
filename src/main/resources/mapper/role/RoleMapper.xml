@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.role.mapper.RoleMapper">
+    <resultMap id="RoleResultMap" type="com.common.auth.role.domain.Role">
+        <id property="roleId" column="role_id" />
+        <result property="roleName" column="role_name"/>
+        <result property="description" column="description"/>
+        <result property="isDefault" column="is_default"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <resultMap id="RoleResponseResultMap" type="com.common.auth.role.dto.RoleResponse">
+        <id property="roleId" column="role_id" />
+        <result property="roleName" column="role_name"/>
+        <result property="description" column="description"/>
+        <result property="isDefault" column="is_default"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    
+    <select id="selectRoleByRoleId" resultMap="RoleResultMap">
+        SELECT 
+            role_id, 
+            role_name, 
+            description, 
+            is_default, 
+            reg_id,
+            reg_dt,
+            chg_id, 
+            chg_dt, 
+            del_id,
+            del_dt,
+            del_yn
+        FROM 
+            role
+        WHERE 
+            role_id = #{roleId}
+    </select>
+    
+    <select id="selectAllRoles" resultMap="RoleResultMap">
+        SELECT 
+            role_id, 
+            role_name, 
+            description, 
+            is_default, 
+            reg_id,
+            reg_dt,
+            chg_id, 
+            chg_dt, 
+            del_id,
+            del_dt,
+            del_yn
+        FROM 
+            role
+        ORDER BY 
+            role_name
+    </select>
+    
+    <select id="selectRolesByMemberId" resultMap="RoleResultMap">
+        SELECT 
+            r.role_id, 
+            r.role_name, 
+            r.description, 
+            r.is_default, 
+            r.reg_id,
+            r.reg_dt,
+            r.chg_id, 
+            r.chg_dt, 
+            r.del_id,
+            r.del_dt,
+            r.del_yn
+        FROM 
+            role r
+        INNER JOIN 
+            user_role ur ON r.role_id = ur.role_id
+        WHERE 
+            ur.member_id = #{memberId}
+            AND ur.del_yn = 'N'
+        ORDER BY 
+            r.role_name
+    </select>
+    
+    <select id="selectDefaultRoles" resultMap="RoleResultMap">
+        SELECT 
+            role_id, role_name, description, is_default, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            role
+        WHERE 
+            is_default = true
+        ORDER BY 
+            role_name
+    </select>
+    
+    <insert id="insertRole" parameterType="com.common.auth.role.domain.Role">
+        INSERT INTO 
+            role(
+                role_id, 
+                role_name, 
+                description, 
+                is_default, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES (
+            COALESCE(#{roleId}, gen_random_uuid()),
+            #{roleName},
+            #{description},
+            #{isDefault},
+            #{regId},
+            COALESCE(#{regDt}, NOW()),
+            #{chgId},
+            COALESCE(#{chgDt}, NOW()),
+            #{delYn}
+        )
+    </insert>
+    
+    <update id="updateRole" parameterType="com.common.auth.role.domain.Role">
+        UPDATE role SET
+            role_name = #{roleName},
+            description = #{description},
+            is_default = #{isDefault},
+            chg_id = #{chgId},
+            chg_dt = NOW(),
+            del_id = #{delId},
+            del_dt = NOW(),
+            del_yn = #{delYn}
+        WHERE 
+            role_id = #{roleId}
+    </update>
+    
+    <delete id="deleteRoleByRoleId">
+        DELETE FROM 
+            role
+        WHERE 
+            role_id = #{roleId}
+    </delete>
+    
+    <select id="selectExistsByRoleName" resultType="boolean">
+        SELECT 
+            EXISTS(
+                SELECT 
+                    1 
+                FROM 
+                    role
+                WHERE 
+                    role_name = #{roleName}
+            )
+    </select>
+    
+    <select id="selectCountRoles" resultType="int">
+        SELECT 
+            COUNT(*) 
+        FROM 
+            role
+    </select>
+    
+    <insert id="insertRolesBatch" parameterType="list">
+        INSERT INTO 
+            role (
+                role_id, 
+                role_name, 
+                description, 
+                is_default, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES
+        <foreach collection="roles" item="role" separator=",">
+            (
+                COALESCE(#{role.roleId}, gen_random_uuid()),
+                #{role.roleName},
+                #{role.description},
+                #{role.isDefault},
+                #{role.regId},
+                COALESCE(#{role.regDt}, NOW()),
+                #{role.chgId},
+                COALESCE(#{role.chgDt}, NOW()),
+                #{role.delYn}
+            )
+        </foreach>
+    </insert>
+    
+    <update id="updateRolesBatch" parameterType="list">
+        <foreach collection="roles" item="role" separator=";">
+            UPDATE 
+                role
+            SET 
+                role_name = #{role.roleName},
+                description = #{role.description},
+                is_default = #{role.isDefault},
+                chg_id = #{role.chgId},
+                chg_dt = COALESCE(#{role.chgDt}, NOW()),
+                del_id = #{role.delId},
+                del_dt = COALESCE(#{role.delDt}, NOW()),
+                del_yn = #{role.delYn}
+            WHERE 
+                role_id = #{role.roleId}
+        </foreach>
+    </update>
+    
+    <select id="selectRolesWithFilter" resultMap="RoleResponseResultMap">
+        SELECT 
+            role_id, 
+            role_name, 
+            description, 
+            is_default, 
+            reg_id,
+            reg_dt,
+            chg_id, 
+            chg_dt,     
+            del_id,
+            del_dt,
+            del_yn
+        FROM role
+        <where>
+            <if test="filter.roleIds != null and filter.roleIds.size() > 0">
+                AND role_id IN
+                <foreach collection="filter.roleIds" item="roleId" open="(" close=")" separator=",">
+                    #{roleId}
+                </foreach>
+            </if>
+            <if test="filter.roleName != null and filter.roleName.trim() != ''">
+                AND role_name ILIKE '%' || #{filter.roleName} || '%'
+            </if>
+            <if test="filter.description != null and filter.description.trim() != ''">
+                AND description ILIKE '%' || #{filter.description} || '%'
+            </if>
+            <if test="filter.isDefault != null">
+                AND is_default = #{filter.isDefault}
+            </if>
+            <if test="filter.delYn != null and filter.delYn.trim() != ''">
+                AND del_yn = #{filter.delYn}
+            </if>
+        </where>
+        order by role_id
+    </select>
+    
+    <!-- Bulk operations - 중복 체크용 메서드들 -->
+    <select id="selectExistRoleIdListByRoleIds" resultType="int">
+        SELECT 
+            role_id
+        FROM 
+            role
+        WHERE 
+            role_id IN
+            <foreach collection="roleIds" item="roleId" open="(" close=")" separator=",">
+                #{roleId}
+            </foreach>
+    </select>
+    
+    <select id="selectExistRoleNameListByRoleNames" resultType="string">
+        SELECT 
+            role_name
+        FROM 
+            role
+        WHERE 
+            role_name IN
+            <foreach collection="roleNames" item="roleName" open="(" close=")" separator=",">
+                #{roleName}
+            </foreach>
+    </select>
+    
+    <select id="selectRoleListByRoleNamesAndNotInRoleIds" resultMap="RoleResultMap">
+        SELECT 
+            role_id, role_name, description, is_default, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM 
+            role
+        <where>
+            <if test="items != null and items.size() > 0">
+                AND (
+                <foreach collection="items" item="item" separator=" OR ">
+                    (role_name = #{item.roleName} AND role_id != #{item.roleId})
+                </foreach>
+                )
+            </if>
+        </where>
+    </select>
+
+    <select id="selectUserRoleDelYn" parameterType="map" resultType="string">
+        SELECT del_yn
+        FROM user_role
+        WHERE member_id = #{memberId}
+          AND role_id   = #{roleId}
+            LIMIT 1
+    </select>
+
+    <!-- Bulk operations - CRUD 메서드들 -->
+    <insert id="insertRolesBulk" parameterType="list">
+        INSERT INTO 
+            role (
+                role_name, 
+                description, 
+                is_default, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES
+        <foreach collection="roles" item="role" separator=",">
+            (
+                #{role.roleName},
+                #{role.description},
+                #{role.isDefault},
+                #{role.regId},
+                #{role.regDt},
+                #{role.chgId},
+                #{role.chgDt},
+                #{role.delYn}
+            )
+        </foreach>
+    </insert>
+    
+    <update id="updateRolesBulk" parameterType="list">
+        UPDATE 
+            role
+        SET 
+            role_name = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.roleName != null and role.roleName.trim() != ''">
+                            WHEN role_id = #{role.roleId} THEN #{role.roleName}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN role_name
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE role_name
+            END,
+            description = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.description != null">
+                            WHEN role_id = #{role.roleId} THEN #{role.description}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN description
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE description
+            END,
+            is_default = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.isDefault != null">
+                            WHEN role_id = #{role.roleId} THEN #{role.isDefault}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN is_default
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE is_default
+            END,
+            chg_id = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.chgId != null">
+                            WHEN role_id = #{role.roleId} THEN #{role.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.chgDt != null">
+                            WHEN role_id = #{role.roleId} THEN #{role.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+        del_id = CASE
+        <foreach collection="roles" item="role" separator=" ">
+            WHEN role_id = #{role.roleId, jdbcType=INTEGER}
+            <choose>
+                <!-- N(복구)이면 삭제자/삭제일시 NULL 처리 -->
+                <when test="role.delYn.equals('N')">
+                    THEN NULL
+                </when>
+                <!-- Y(삭제)면 delId 제공 시 설정, 없으면 유지 -->
+                <when test="role.delYn.equals('Y')">
+                    THEN #{role.delId}
+                </when>
+                <otherwise>
+                    THEN del_id
+                </otherwise>
+            </choose>
+        </foreach>
+        ELSE del_id
+        END,
+
+        del_dt = CASE
+        <foreach collection="roles" item="role" separator=" ">
+            WHEN role_id = #{role.roleId, jdbcType=INTEGER}
+            <choose>
+                <!-- N(복구)이면 NULL -->
+                <when test="role.delYn.equals('N')">
+                    THEN NULL
+                </when>
+                <!-- Y(삭제)면 delDt 제공 시 설정, 없으면 유지(혹은 now()로 바꾸려면 THEN now()) -->
+                <when test="role.delYn.equals('Y')">
+                    THEN #{role.delDt}
+                </when>
+                <otherwise>
+                    THEN del_dt
+                </otherwise>
+            </choose>
+        </foreach>
+        ELSE del_dt
+        END,
+
+        del_yn = CASE
+        <foreach collection="roles" item="role" separator=" ">
+            WHEN role_id = #{role.roleId, jdbcType=INTEGER}
+            THEN #{role.delYn, jdbcType=CHAR}
+        </foreach>
+        ELSE del_yn
+        END
+        WHERE 
+            role_id IN
+            <foreach collection="roles" item="role" open="(" close=")" separator=",">
+                #{role.roleId}
+            </foreach>
+    </update>
+    
+    <delete id="deleteRolesBulk" parameterType="list">
+        DELETE FROM 
+            role
+        WHERE 
+            role_id IN
+            <foreach collection="roles" item="role" open="(" close=")" separator=",">
+                #{role.roleId}
+            </foreach>
+    </delete>
+    
+    <update id="softDeleteRolesBulk" parameterType="list">
+        UPDATE 
+            role
+        SET 
+            del_yn = CASE
+                <foreach collection="roles" item="role" separator=" ">
+                    WHEN role_id = #{role.roleId} THEN #{role.delYn}
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.chgId != null">
+                            WHEN role_id = #{role.roleId} THEN #{role.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.chgDt != null">
+                            WHEN role_id = #{role.roleId} THEN #{role.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.delId != null">
+                            WHEN role_id = #{role.roleId} THEN #{role.delId}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_id
+            END,
+            del_dt = CASE 
+                <foreach collection="roles" item="role" separator=" ">
+                    <choose>
+                        <when test="role.delDt != null">
+                            WHEN role_id = #{role.roleId} THEN #{role.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{role.roleId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_dt
+            END
+        WHERE 
+            role_id IN
+            <foreach collection="roles" item="role" open="(" close=")" separator=",">
+                #{role.roleId}
+            </foreach>
+    </update>
+    
+</mapper>

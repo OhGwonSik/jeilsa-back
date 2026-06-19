@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.system.mapper.ShipperMapper">
+
+    <!-- SELECT -->
+    <select id="selectShipperList" resultType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* selectShipperList */
+        SELECT
+            shipper_id, company_id,
+            use_yn, shipper_cd, vat_yn, bill_stdr_cd, taxbil_output_yn,
+            communication_fee, untpc, weight_untpc, bill_company_id, excclc_company_id,
+            reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM shipper
+        WHERE del_yn = 'N'
+        	<if test='shipperId != null and shipperId != ""'>
+        		AND shipper_id = #{shipperId}
+        	</if>
+    </select>
+
+    <!-- SELECT -->
+    <select id="existShipperById" resultType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* existShipperById */
+        SELECT
+            shipper_id, company_id,
+            use_yn, shipper_cd, vat_yn, bill_stdr_cd, taxbil_output_yn,
+            communication_fee, untpc, weight_untpc, bill_company_id, excclc_company_id,
+            reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM shipper
+        WHERE company_id = #{companyId}
+    </select>
+    <select id="checkCompanyByBillCompanyId" resultType="java.lang.Boolean">
+        SELECT EXISTS (
+        SELECT 1
+        FROM shipper
+        WHERE
+        bill_company_id = #{billCompanyId}
+        AND del_yn = 'N'
+        )
+    </select>
+
+    <!-- INSERT -->
+    <insert id="insertShipper" parameterType="com.jeil.delivery.system.domain.ShipperVO">
+    	/* insertShipper */
+        INSERT INTO shipper (
+            company_id,
+            use_yn, shipper_cd, vat_yn, bill_stdr_cd, taxbil_output_yn,
+            communication_fee, untpc, weight_untpc, bill_company_id, excclc_company_id,
+            reg_id, chg_id, del_yn
+        ) VALUES (
+            #{companyId},
+            #{useYn}, #{shipperCd}, #{vatYn}, #{billStdrCd}, #{taxbilOutputYn},
+            #{communicationFee}, #{untpc}, #{weightUntpc}, #{billCompanyId}, #{excclcCompanyId},
+            #{regId}, #{chgId}, #{useYn}
+        )
+    </insert>
+
+    <!-- INSERT -->
+    <insert id="insertCompanyShipper" parameterType="com.jeil.delivery.system.domain.CompanyDTO" useGeneratedKeys="true" keyProperty="param.shipperId" keyColumn="shipper_id">
+    	/* insertCompanyShipper */
+        INSERT INTO shipper (
+            company_id,
+            use_yn, shipper_cd, vat_yn, bill_stdr_cd, bill_char_cd , taxbil_output_yn,
+            communication_fee, untpc, weight_untpc, bill_company_id, excclc_company_id,
+            reg_id, chg_id, del_yn
+        ) VALUES (
+            #{param.companyId},
+            #{param.useYn}, #{param.shipperCd}, #{param.vatYn}, #{param.billStdrCd}, #{param.billCharCd}, #{param.taxbilOutputYn},
+            #{param.communicationFee}, #{param.untpc}, #{param.weightUntpc}, #{param.billCompanyId}, #{param.excclcCompanyId},
+            #{memberInfo.memberId}, #{memberInfo.memberId}, 'N'
+        )
+    </insert>
+
+    <!-- UPDATE -->
+    <update id="updateShipper" parameterType="com.jeil.delivery.system.domain.ShipperVO">
+    	/* updateShipper */
+        UPDATE shipper
+	        SET
+	            company_id = #{param.companyId},
+	            shipper_cd = #{param.shipperCd},
+	            vat_yn = #{param.vatYn},
+	            bill_stdr_cd = #{param.billStdrCd},
+	            taxbil_output_yn = #{param.taxbilOutputYn},
+	            communication_fee = #{param.communicationFee},
+	            untpc = #{param.untpc},
+	            weight_untpc = #{param.weightUntpc},
+	            bill_company_id = #{param.billCompanyId},
+	            excclc_company_id = #{param.excclcCompanyId},
+	            use_yn = #{param.useYn},
+	            chg_id = #{memberInfo.memberId},
+	            chg_dt = now()
+	        WHERE shipper_id = #{param.shipperId}
+	        	AND company_id = #{param.companyId}
+    </update>
+
+    <!-- DELETE (Soft Delete) -->
+    <update id="deleteShipper" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* deleteShipper */
+        UPDATE shipper
+	        SET del_yn = 'Y',
+	        	use_yn = 'Y',
+	        	chg_id = #{memberInfo.memberId},
+	            chg_dt = now()
+	        WHERE shipper_id = #{param.shipperId}
+    </update>
+
+    <!-- DELETE (Hard Delete) -->
+    <delete id="deleteShipperById" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* deleteShipperById */
+        DELETE FROM shipper WHERE company_id = #{companyId}
+    </delete>
+</mapper>

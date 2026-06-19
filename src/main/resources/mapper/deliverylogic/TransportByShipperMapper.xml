@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jeil.delivery.deliverylogic.mapper.TransportByShipperMapper">
+	<select id="selectTransportInfoByshipper" resultType="com.jeil.delivery.deliverylogic.domain.TransportByShipperDTO">
+		/* selectTransportInfoByshipper */
+		SELECT
+			tr.transport_id, trd.transport_dtl_id
+			, trd.shipment_operation_date
+			, tr.sender_region_cd ,co3.code_nm AS sender_region_nm
+			, tr.sender_region_dtl_cd ,co4.code_nm AS sender_region_dtl_nm
+			, tr.sender_company_id, tr.sender_company_nm
+			, tr.sender_tel_no
+			, tr.sender_manager_nm, tr.sender_manager_tel_no
+			, tr.receiver_company_id, tr.receiver_company_nm
+			, tr.receiver_tel_no
+			, tr.receiver_manager_nm, tr.receiver_manager_tel_no
+			, trd.calculation_cd, co1.code_nm AS calculation_nm, trd.kind_cd, co2.code_nm AS kind_nm
+			, CASE
+				WHEN trd.calculation_cd = 'QTY' THEN trd.qty
+				ELSE 0
+			END AS com_qty
+			, CASE
+				WHEN trd.calculation_cd = 'WEIGHT' THEN trd.qty
+				ELSE 0
+			  END AS weight_qty
+			, CASE
+				WHEN tr.charge_cd = 'CH002' THEN trd.amount
+				ELSE 0
+			  END AS collect_amount
+			, CASE
+				WHEN (tr.charge_cd = 'CH001' OR tr.charge_cd = 'CH003') THEN trd.amount
+				ELSE 0
+			  END AS prepaid_amount
+			, tr.receiver_rmk AS rmk
+			, trd.calculation_target_cd
+			, co5.code_nm AS calculation_target_nm
+		FROM
+			transport_dtl trd
+		INNER JOIN transport tr ON
+			tr.transport_id = trd.transport_id
+			AND tr.del_yn = 'N'
+		INNER JOIN code co1 ON
+			co1.code_val = trd.calculation_cd
+			AND co1."type" = 'CALCULATION_TYPE'
+			AND co1.del_yn = 'N'
+		INNER JOIN code co2 ON
+			co2.code_val = trd.kind_cd
+			AND co2."type" = 'KIND_TYPE'
+			AND co2.del_yn = 'N'
+		INNER JOIN code co3 ON
+			co3.code_val = tr.sender_region_cd
+			AND co3."type" = 'REGION_TYPE'
+			AND co3.del_yn = 'N'
+		INNER JOIN code co4 ON
+			co4.code_val = tr.sender_region_dtl_cd
+			AND co4.parnts_code_val = tr.sender_region_cd
+			AND co4."type" = 'REGION_DTL_TYPE'
+			AND co4.del_yn = 'N'
+		INNER JOIN code co5 ON
+			co5.code_val = trd.calculation_target_cd
+			AND co5."type" = 'SENDER_RECEIVER_TYPE'
+			AND co5.del_yn = 'N'
+		WHERE
+			trd.del_yn = 'N'
+			<if test='companyNm != null and companyNm != ""'>
+				AND (
+					LOWER(tr.sender_company_nm) LIKE CONCAT('%', LOWER(#{companyNm}), '%')
+					OR LOWER(tr.receiver_company_nm) LIKE CONCAT('%', LOWER(#{companyNm}), '%')
+				)
+			</if>
+			<if test='startDate != null and startDate != ""'>
+				<![CDATA[
+				AND trd.shipment_operation_date >= #{startDate}
+				]]>
+			</if>
+			<if test='endDate != null and endDate != ""'>
+				<![CDATA[
+				AND trd.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+				]]>
+			</if>
+			<if test='isUser == true'>
+				AND (
+			    	(trd.calculation_target_cd = 'SENDER' AND tr.sender_company_id = #{userCompanyId})
+			    	OR
+			    	(trd.calculation_target_cd = 'RECEIVER' AND tr.receiver_company_id = #{userCompanyId})
+			  	)
+			</if>
+		ORDER BY
+			tr.shipment_operation_date DESC
+	</select>
+
+
+	<select id="selectSettlementByShipper" resultType="com.jeil.delivery.deliverylogic.domain.TransportByShipperDTO">
+		/* selectSettlementByShipper */
+		WITH companies AS (
+		  SELECT
+			  bd.bill_id, bd.bill_dtl_id,
+		      CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_id
+		           ELSE bt.receiver_company_id END AS company_id,
+		      CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_nm
+		           ELSE bt.receiver_company_nm END AS company_nm
+		  FROM bill b
+		  INNER JOIN bill_dtl bd ON b.bill_id = bd.bill_id
+		  INNER JOIN bill_transport bt ON
+			  bd.bill_id = bt.bill_id
+			  AND bd.bill_dtl_id = bt.bill_dtl_id
+			  AND bd.bill_dtl_dgre = bt.bill_dtl_dgre
+		  INNER JOIN bill_transport_dtl btd ON
+			  bt.transport_id = btd.transport_id
+			  AND bt.bill_id = btd.bill_id
+			  AND bt.bill_dtl_id = btd.bill_dtl_id
+			  AND bt.bill_dtl_dgre = btd.bill_dtl_dgre
+			  AND bt.calculation_company_id = btd.calculation_company_id
+		  WHERE b.del_yn = 'N'
+		    AND bd.del_yn = 'N'
+		    AND bt.del_yn = 'N'
+		    AND btd.del_yn = 'N'
+		    AND b."year" = #{year}
+		    AND b."month" = #{month}
+		    -- bill_id별 최신 차수만
+		    AND bd.bill_dtl_dgre = (
+				SELECT
+					MAX(bd2.bill_dtl_dgre)
+				FROM
+					bill_dtl bd2
+				WHERE
+					bd2.bill_id = bd.bill_id
+					AND bd2.calculation_company_id = btd.calculation_company_id
+					AND bd2.del_yn = 'N'
+		    )
+		    <if test='companyNm != null and companyNm != ""'>
+		    	AND (
+		    			CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_nm
+							ELSE bt.receiver_company_nm
+						END
+					) LIKE CONCAT('%',#{companyNm},'%')
+		    </if>
+		    <if test='isUser == true'>
+		    	AND (
+		    			CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_id
+		           			ELSE bt.receiver_company_id
+		           		END
+	           		) = #{userCompanyId}
+		    </if>
+		  GROUP BY
+		      bd.bill_id, bd.bill_dtl_id,
+		      CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_id
+		           ELSE bt.receiver_company_id END,
+		      CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_nm
+		           ELSE bt.receiver_company_nm END
+		),
+		types AS (
+		  SELECT 'SENDER' AS calculation_target_cd, '발신' AS type, 1 AS sort_order
+		  UNION ALL
+		  SELECT 'RECEIVER', '수신', 2
+		),
+		base AS (
+		  SELECT
+		  	  bd.bill_id, bd.bill_dtl_id,
+		      CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_id
+		           ELSE bt.receiver_company_id END AS company_id,
+		      CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_nm
+		           ELSE bt.receiver_company_nm END AS company_nm,
+		      btd.sender_receiver_cd,
+		      btd.calculation_target_cd,
+		      btd.kind_cd,
+		      btd.qty
+		  FROM bill b
+		  INNER JOIN bill_dtl bd ON b.bill_id = bd.bill_id
+		  INNER JOIN bill_transport bt ON
+			  bd.bill_id = bt.bill_id
+			  AND bd.bill_dtl_id = bt.bill_dtl_id
+			  AND bd.bill_dtl_dgre = bt.bill_dtl_dgre
+		  INNER JOIN bill_transport_dtl btd ON
+			  bt.transport_id = btd.transport_id
+			  AND bt.bill_id = btd.bill_id
+			  AND bt.bill_dtl_id = btd.bill_dtl_id
+			  AND bt.bill_dtl_dgre = btd.bill_dtl_dgre
+			  AND bt.calculation_company_id = btd.calculation_company_id
+		  WHERE b.del_yn = 'N'
+		    AND bd.del_yn = 'N'
+		    AND bt.del_yn = 'N'
+		    AND btd.del_yn = 'N'
+		    AND b."year" = #{year}
+		    AND b."month" = #{month}
+		    AND bd.bill_dtl_dgre = (
+				SELECT
+					MAX(bd2.bill_dtl_dgre)
+				FROM
+					bill_dtl bd2
+				WHERE
+					bd2.bill_id = bd.bill_id
+					AND bd2.calculation_company_id = btd.calculation_company_id
+					AND bd2.del_yn = 'N'
+		    )
+		    <if test='companyNm != null and companyNm != ""'>
+		    	AND (CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_nm
+						ELSE bt.receiver_company_nm
+					END) LIKE CONCAT('%',#{companyNm},'%')
+		    </if>
+		    <if test='isUser == true'>
+		    	AND (
+		    			CASE WHEN btd.calculation_target_cd = 'SENDER' THEN bt.sender_company_id
+		           			ELSE bt.receiver_company_id
+		           		END
+	           		) = #{userCompanyId}
+		    </if>
+		)
+		-- 메인 SELECT: 회사 × (발신, 수신) 집계
+		SELECT
+		  c.bill_id,
+		  c.bill_dtl_id,
+		  c.company_id,
+		  c.company_nm,
+		  t.type,
+		  COALESCE(SUM(CASE WHEN b.kind_cd='TAC0201' THEN b.qty END),0) AS documents,
+		  COALESCE(SUM(CASE WHEN b.kind_cd='TAC0202' THEN b.qty END),0) AS boxes,
+		  COALESCE(SUM(CASE WHEN b.kind_cd='TAC0203' THEN b.qty END),0) AS roll,
+		  COALESCE(SUM(CASE WHEN b.kind_cd='TAC0204' THEN b.qty END),0) AS samples,
+		  COALESCE(SUM(CASE WHEN b.kind_cd='TAC0205' THEN b.qty END),0) AS tarp,
+		  COALESCE(SUM(CASE WHEN b.kind_cd='TAC0206' THEN b.qty END),0) AS bags,
+		  COALESCE(SUM(CASE WHEN b.kind_cd='TAC0207' THEN b.qty END),0) AS luggage,
+		  COALESCE(SUM(b.qty),0) AS total,
+		  t.sort_order
+		FROM companies c
+		CROSS JOIN types t
+		LEFT JOIN base b
+		  ON b.company_id = c.company_id
+		 AND b.calculation_target_cd = t.calculation_target_cd
+		GROUP BY c.bill_id, c.bill_dtl_id,c.company_id, c.company_nm, t.type, t.sort_order
+		UNION ALL
+		-- 합계 row
+		SELECT
+		  bill_id,
+		  bill_dtl_id,
+		  company_id,
+		  company_nm,
+		  '합계' AS type,
+		  SUM(CASE WHEN kind_cd='TAC0201' THEN qty ELSE 0 END) AS documents,
+		  SUM(CASE WHEN kind_cd='TAC0202' THEN qty ELSE 0 END) AS boxes,
+		  SUM(CASE WHEN kind_cd='TAC0203' THEN qty ELSE 0 END) AS roll,
+		  SUM(CASE WHEN kind_cd='TAC0204' THEN qty ELSE 0 END) AS samples,
+		  SUM(CASE WHEN kind_cd='TAC0205' THEN qty ELSE 0 END) AS tarp,
+		  SUM(CASE WHEN kind_cd='TAC0206' THEN qty ELSE 0 END) AS bags,
+		  SUM(CASE WHEN kind_cd='TAC0207' THEN qty ELSE 0 END) AS luggage,
+		  SUM(qty) AS total,
+		  3 AS sort_order
+		FROM base
+		GROUP BY bill_id, bill_dtl_id, company_id, company_nm
+		ORDER BY company_id, sort_order
+	</select>
+</mapper>

@@ -1,0 +1,713 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.menu.mapper.MenuMapper">
+    <resultMap id="MenuResultMap" type="com.common.auth.menu.domain.Menu">
+        <id property="menuId" column="menu_id" />
+        <result property="menuName" column="menu_name"/>
+        <result property="menuType" column="menu_type"/>
+        <result property="description" column="description"/>
+        <result property="parentId" column="parent_id" />
+        <result property="menuPath" column="menu_path"/>
+        <result property="menuOrder" column="menu_order"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <resultMap id="MenuResponseResultMap" type="com.common.auth.menu.dto.MenuResponse">
+        <id property="menuId" column="menu_id" />
+        <result property="menuName" column="menu_name"/>
+        <result property="menuType" column="menu_type"/>
+        <result property="description" column="description"/>
+        <result property="parentId" column="parent_id" />
+        <result property="menuPath" column="menu_path"/>
+        <result property="menuOrder" column="menu_order"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <select id="selectMenuByMenuId" resultMap="MenuResultMap">
+        SELECT
+            menu_id, menu_name, menu_type, description, parent_id, menu_path, menu_order, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM
+            menu
+        WHERE
+            menu_id = #{menuId}
+    </select>
+
+    <select id="selectAllMenus" resultMap="MenuResultMap">
+        SELECT
+            menu_id, menu_name, menu_type, description, parent_id, menu_path, menu_order, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM
+            menu
+        ORDER BY
+            menu_type, menu_order, menu_name
+    </select>
+
+    <select id="selectMenusByParentMenuId" resultMap="MenuResultMap">
+        SELECT
+            menu_id, menu_name, menu_type, description, parent_id, menu_path, menu_order, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM
+            menu
+        WHERE
+            parent_id = #{parentId}
+        ORDER BY
+            menu_type, menu_order, menu_name
+    </select>
+
+    <select id="selectRootMenus" resultMap="MenuResultMap">
+        SELECT
+            menu_id, menu_name, menu_type, description, parent_id, menu_path, menu_order, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM
+            menu
+        WHERE
+            parent_id IS NULL
+        ORDER BY
+            menu_type, menu_order, menu_name
+    </select>
+
+    <select id="selectMenusByRoleId" resultMap="MenuResultMap">
+        SELECT
+            m.menu_id, m.menu_name, m.menu_type, m.description, m.parent_id, m.menu_path, m.menu_order, m.reg_id, m.reg_dt, m.chg_id, m.chg_dt, m.del_id, m.del_dt, m.del_yn
+        FROM
+            menu m
+        INNER JOIN
+            role_menu rm
+            ON
+                m.menu_id = rm.menu_id
+        WHERE
+            rm.role_id = #{roleId}
+        ORDER BY
+            m.menu_type, m.menu_order, m.menu_name
+    </select>
+
+    <select id="selectMenusByMemberId" resultMap="MenuResultMap">
+        SELECT DISTINCT
+            m.menu_id, m.menu_name, m.menu_type, m.description, m.parent_id, m.menu_path, m.menu_order, m.reg_id, m.reg_dt, m.chg_id, m.chg_dt, m.del_id, m.del_dt, m.del_yn
+        FROM
+            menu m
+        INNER JOIN
+            role_menu rm
+            ON
+                m.menu_id = rm.menu_id
+        INNER JOIN
+            user_role ur
+            ON
+                rm.role_id = ur.role_id
+        WHERE
+            ur.member_id = #{memberId}
+        ORDER BY
+            m.menu_type, m.menu_order, m.menu_name
+    </select>
+
+    <select id="selectMenuTreeByMemberId" resultMap="MenuResultMap">
+        SELECT DISTINCT
+            m.menu_id,
+            m.parent_id,
+            m.menu_name,
+            m.menu_type,
+            m.menu_path,
+            m.menu_order,
+            m.del_yn,
+            m.del_id,
+            m.del_dt
+        FROM menu m
+        WHERE COALESCE(m.del_yn, 'N') = 'N'
+          AND EXISTS (
+            SELECT 1
+            FROM role_menu rm
+                     JOIN user_role ur
+                          ON ur.role_id = rm.role_id
+                              AND COALESCE(ur.del_yn, 'N') = 'N'
+            WHERE rm.menu_id = m.menu_id
+              AND COALESCE(rm.del_yn, 'N') = 'N'
+              AND ur.member_id = #{memberId}
+        )
+        ORDER BY m.parent_id NULLS FIRST, m.menu_order, m.menu_id
+    </select>
+
+    <insert id="insertMenu" parameterType="com.common.auth.menu.domain.Menu">
+        INSERT INTO
+            menu (
+                menu_id,
+                menu_name,
+                menu_type,
+                description,
+                parent_id,
+                menu_path,
+                menu_order,
+                reg_id,
+                reg_dt,
+                chg_id,
+                chg_dt,
+                del_yn
+            )
+        VALUES (
+            COALESCE(#{menuId}, gen_random_uuid()),
+            #{menuName},
+            #{menuType},
+            #{description},
+            #{parentId},
+            #{menuPath},
+            #{menuOrder},
+            #{regId},
+            COALESCE(#{regDt}, NOW()),
+            #{chgId},
+            COALESCE(#{chgDt}, NOW()),
+            #{delYn}
+        )
+    </insert>
+
+    <update id="updateMenu" parameterType="com.common.auth.menu.domain.Menu">
+        UPDATE
+            menu
+        SET
+            menu_name = #{menuName},
+            menu_type = #{menuType},
+            description = #{description},
+            parent_id = #{parentId},
+            menu_path = #{menuPath},
+            menu_order = #{menuOrder},
+            chg_id = #{chgId},
+            chg_dt = NOW(),
+            del_id = #{delId},
+            del_dt = #{delDt},
+            del_yn = #{delYn}
+        WHERE
+            menu_id = #{menuId}
+    </update>
+
+    <delete id="deleteMenuByMenuId">
+        DELETE FROM
+            menu
+        WHERE
+            menu_id = #{menuId}
+    </delete>
+
+    <select id="selectCountMenus" resultType="int">
+        SELECT
+            COUNT(*)
+        FROM
+            menu
+    </select>
+
+    <select id="selectMenusWithFilter" resultMap="MenuResponseResultMap">
+        SELECT
+            menu_id,
+            menu_name,
+            menu_type,
+            description,
+            parent_id,
+            menu_path,
+            menu_order,
+            reg_id,
+            reg_dt,
+            chg_id,
+            chg_dt,
+            del_id,
+            del_dt,
+            del_yn
+        FROM menu
+        <where>
+            <if test="filter.menuIds != null and filter.menuIds.size() > 0">
+                AND menu_id IN
+                <foreach collection="filter.menuIds" item="menuId" open="(" close=")" separator=",">
+                    #{menuId}
+                </foreach>
+            </if>
+            <if test="filter.menuName != null and filter.menuName.trim() != ''">
+                AND menu_name ILIKE '%' || #{filter.menuName} || '%'
+            </if>
+            <if test="filter.menuType != null and filter.menuType.trim() != ''">
+                AND menu_type = #{filter.menuType}
+            </if>
+            <if test="filter.menuPath != null and filter.menuPath.trim() != ''">
+                AND menu_path ILIKE '%' || #{filter.menuPath} || '%'
+            </if>
+            <if test="filter.parentId != null">
+                AND parent_id = #{filter.parentId}
+            </if>
+            <if test="filter.delYn != null">
+                AND del_yn = #{filter.delYn}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectMenuHeadersWithFilter" resultMap="MenuResponseResultMap">
+        SELECT
+            menu_id,
+            menu_name,
+            menu_type,
+            description,
+            parent_id,
+            menu_path,
+            menu_order,
+            reg_id,
+            reg_dt,
+            chg_id,
+            chg_dt,
+            del_id,
+            del_dt,
+            del_yn
+        FROM
+            menu
+        WHERE
+            menu_type = 'HEADER'
+        <if test="filter.menuIds != null and filter.menuIds.size() > 0">
+            AND menu_id IN
+            <foreach collection="filter.menuIds" item="menuId" open="(" close=")" separator=",">
+                #{menuId}
+            </foreach>
+        </if>
+        <if test="filter.menuName != null and filter.menuName.trim() != ''">
+            AND menu_name ILIKE '%' || #{filter.menuName} || '%'
+        </if>
+        <if test="filter.menuType != null and filter.menuType.trim() != ''">
+            AND menu_type = #{filter.menuType}
+        </if>
+        <if test="filter.menuPath != null and filter.menuPath.trim() != ''">
+            AND menu_path ILIKE '%' || #{filter.menuPath} || '%'
+        </if>
+        <if test="filter.parentId != null">
+            AND parent_id = #{filter.parentId}
+        </if>
+        <if test="filter.delYn != null and filter.delYn.trim() != ''">
+            AND del_yn = #{filter.delYn}
+        </if>
+    </select>
+
+    <select id="selectMenuHeadersItemsWithFilter" resultMap="MenuResponseResultMap">
+        SELECT
+            menu_id,
+            menu_name,
+            menu_type,
+            description,
+            parent_id,
+            menu_path,
+            menu_order,
+            reg_id,
+            reg_dt,
+            chg_id,
+            chg_dt,
+            del_id,
+            del_dt,
+            del_yn
+        FROM
+            menu
+        WHERE
+            menu_type = 'MENU'
+        <if test="filter != null and filter.menuIds != null and filter.menuIds.size() > 0">
+            AND menu_id IN
+            <foreach collection="filter.menuIds" item="menuId" open="(" close=")" separator=",">
+                #{menuId}
+            </foreach>
+        </if>
+        <if test="filter != null and filter.menuName != null and filter.menuName.trim() != ''">
+            AND menu_name ILIKE '%' || #{filter.menuName} || '%'
+        </if>
+        <!-- <if test="menuType != null and menuType.trim() != ''">
+            AND menu_type = #{menuType}
+        </if>
+        <if test="menuPath != null and menuPath.trim() != ''">
+            AND menu_path ILIKE '%' || #{menuPath} || '%'
+        </if> -->
+        <if test="parentIds != null and parentIds.size() > 0">
+            AND parent_id IN
+            <foreach collection="parentIds" item="parentId" open="(" close=")" separator=",">
+                #{parentId}
+            </foreach>
+        </if>
+        <if test="filter != null and filter.delYn != null">
+            AND del_yn = #{filter.delYn}
+        </if>
+    </select>
+
+    <!-- Bulk operations - 중복 체크용 메서드들 -->
+    <select id="selectExistMenuIdListByMenuIds" resultType="int">
+        SELECT
+            menu_id
+        FROM
+            menu
+        WHERE
+            menu_id IN
+            <foreach collection="menuIds" item="menuId" open="(" close=")" separator=",">
+                #{menuId}
+            </foreach>
+    </select>
+
+    <select id="selectExistMenuListByMenuNamesAndMenuTypes" resultMap="MenuResultMap">
+        SELECT
+            menu_id, menu_name, menu_type, description, parent_id, menu_path, menu_order, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM
+            menu
+        <where>
+            <if test="items != null and items.size() > 0">
+                AND (
+                <foreach collection="items" item="item" separator=" OR ">
+                    (menu_name = #{item.menuName} AND menu_type = #{item.menuType})
+                </foreach>
+                )
+            </if>
+        </where>
+    </select>
+
+    <select id="selectMenuListByMenuNamesAndMenuTypesAndNotInMenuIds" resultMap="MenuResultMap">
+        SELECT
+            menu_id, menu_name, menu_type, description, parent_id, menu_path, menu_order, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM
+            menu
+        <where>
+            <if test="items != null and items.size() > 0">
+                AND (
+                <foreach collection="items" item="item" separator=" OR ">
+                    (menu_name = #{item.menuName} AND menu_type = #{item.menuType} AND menu_id != #{item.menuId})
+                </foreach>
+                )
+            </if>
+        </where>
+    </select>
+
+    <!-- Bulk operations - CRUD 메서드들 -->
+    <insert id="insertMenusBulk" parameterType="list">
+        INSERT INTO
+            menu (
+                menu_id,
+                menu_name,
+                menu_type,
+                description,
+                parent_id,
+                menu_path,
+                menu_order,
+                reg_id,
+                reg_dt,
+                chg_id,
+                chg_dt,
+                del_yn
+            )
+        VALUES
+        <foreach collection="menus" item="menu" separator=",">
+            (
+                #{menu.menuId},
+                #{menu.menuName},
+                #{menu.menuType},
+                #{menu.description},
+                #{menu.parentId},
+                #{menu.menuPath},
+                #{menu.menuOrder},
+                #{menu.regId},
+                #{menu.regDt},
+                #{menu.chgId},
+                #{menu.chgDt},
+                #{menu.delYn}
+            )
+        </foreach>
+    </insert>
+    <select id="selectMenuTreeMapByMemberId"
+            parameterType="integer"
+            resultType="hashmap">
+        SELECT DISTINCT
+            m.menu_id    AS "menuId",
+            m.parent_id  AS "parentId",
+            m.menu_name  AS "menuName",
+            m.menu_type  AS "menuType",
+            m.menu_path  AS "menuPath",
+            m.menu_order AS "menuOrder",
+            m.del_yn     AS "delYn",
+            m.del_id     AS "delId",
+            m.del_dt     AS "delDt"
+        FROM menu m
+        WHERE COALESCE(m.del_yn, 'N') = 'N'
+          AND EXISTS (
+            SELECT 1
+            FROM role_menu rm
+                     JOIN user_role ur
+                          ON ur.role_id = rm.role_id
+                              AND COALESCE(ur.del_yn, 'N') = 'N'
+            WHERE rm.menu_id = m.menu_id
+              AND COALESCE(rm.del_yn, 'N') = 'N'
+              AND ur.member_id = #{memberId}
+        )
+        ORDER BY m.parent_id NULLS FIRST, m.menu_order, m.menu_id
+    </select>
+    <update id="updateMenusBulk" parameterType="list">
+        UPDATE
+            menu
+        SET
+            menu_name = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.menuName != null and menu.menuName.trim() != ''">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.menuName}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN menu_name
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE menu_name
+            END,
+            menu_type = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.menuType != null and menu.menuType.trim() != ''">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.menuType}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN menu_type
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE menu_type
+            END,
+            description = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.description != null">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.description}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN description
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE description
+            END,
+            parent_id = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.parentId != null">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.parentId}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN parent_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE parent_id
+            END,
+            menu_path = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.menuPath != null">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.menuPath}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN menu_path
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE menu_path
+            END,
+            menu_order = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.menuOrder != null">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.menuOrder}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN menu_order
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE menu_order
+            END,
+            chg_id = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.chgId != null">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.chgDt != null">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id =
+                <foreach collection="menus" item="menu" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="menu.delYn != null and menu.delYn == true">
+                            WHEN menu_id = #{menu.menuId} THEN NULL::uuid
+                        </when>
+                        <when test="menu.delId != null">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.delId}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_dt =
+                <foreach collection="menus" item="menu" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="menu.delYn != null and menu.delYn == true">
+                            WHEN menu_id = #{menu.menuId} THEN NULL::timestamp
+                        </when>
+                        <when test="menu.delDt != null">
+                            WHEN menu_id = #{menu.menuId} THEN #{menu.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_yn = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.delYn != null">
+                            WHEN menu_id = #{menu.menuId}
+                            THEN #{menu.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId}
+                            THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END
+        WHERE
+            menu_id IN
+            <foreach collection="menus" item="menu" open="(" close=")" separator=",">
+                #{menu.menuId}
+            </foreach>
+    </update>
+
+    <delete id="deleteMenusBulk" parameterType="list">
+        DELETE FROM
+            menu
+        WHERE
+            menu_id IN
+            <foreach collection="menus" item="menu" open="(" close=")" separator=",">
+                #{menu.menuId}
+            </foreach>
+    </delete>
+
+    <update id="softDeleteMenusBulk" parameterType="list">
+        UPDATE
+            menu
+        SET
+            del_yn = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    WHEN menu_id = #{menu.menuId}
+                    THEN #{menu.delYn}
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.chgId != null">
+                            WHEN menu_id = #{menu.menuId}
+                            THEN #{menu.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId}
+                            THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    <choose>
+                        <when test="menu.chgDt != null">
+                            WHEN menu_id = #{menu.menuId}
+                            THEN #{menu.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN menu_id = #{menu.menuId}
+                            THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    WHEN menu_id = #{menu.menuId}
+                    THEN #{menu.delId}
+                </foreach>
+                ELSE del_id
+            END,
+            del_dt = CASE
+                <foreach collection="menus" item="menu" separator=" ">
+                    WHEN menu_id = #{menu.menuId}
+                    THEN #{menu.delDt}
+                </foreach>
+                ELSE del_dt
+            END
+        WHERE
+            menu_id IN
+            <foreach collection="menus" item="menu" open="(" close=")" separator=",">
+                #{menu.menuId}
+            </foreach>
+    </update>
+
+    <!-- 모든 하위 메뉴 재귀적 조회 -->
+    <select id="selectAllDescendantMenus" resultMap="MenuResponseResultMap">
+        WITH RECURSIVE menu_tree AS (
+            -- Base case: 선택된 헤더 메뉴의 직계 자식들
+            SELECT
+                m.menu_id, m.menu_name, m.menu_type, m.description,
+                m.parent_id, m.menu_path, m.menu_order,
+                m.reg_id, m.reg_dt, m.chg_id, m.chg_dt,
+                m.del_id, m.del_dt, m.del_yn
+            FROM
+                menu m
+            <where>
+                <if test="headerIds != null and !headerIds.isEmpty()">
+                    m.parent_id IN
+                    <foreach collection="headerIds" item="headerId" open="(" close=")" separator=",">
+                        #{headerId}
+                    </foreach>
+                    <!--AND m.del_yn = true-->
+                </if>
+            </where>
+
+            UNION ALL
+
+            -- Recursive case: 자식의 자식들
+            SELECT
+                m.menu_id, m.menu_name, m.menu_type, m.description,
+                m.parent_id, m.menu_path, m.menu_order,
+                m.reg_id, m.reg_dt, m.chg_id, m.chg_dt,
+                m.del_id, m.del_dt, m.del_yn
+            FROM
+                menu m
+            INNER JOIN
+                menu_tree mt ON m.parent_id = mt.menu_id
+            <where>
+                <!-- m.del_yn = true -->
+            </where>
+        )
+        SELECT * FROM menu_tree
+        ORDER BY menu_order, menu_name
+    </select>
+</mapper>

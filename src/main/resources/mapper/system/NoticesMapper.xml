@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.system.mapper.NoticesMapper">
+
+    <!-- SELECT -->
+    <select id="selectNoticesList" resultType="com.jeil.delivery.system.domain.NoticesVO">
+    	/* selectNoticesList */
+        SELECT
+			n.notice_id, n.title, n.content
+            , n.reg_id, m."name" AS reg_nm, n.reg_dt, n.chg_id, n.chg_dt, n.del_yn
+        FROM
+        	notices n
+        LEFT JOIN member m ON
+        	m.member_id = n.reg_id
+        	AND m.del_yn = 'N'
+        WHERE
+        	n.del_yn = 'N'
+        	<if test='noticeId != null and noticeId != ""'>
+        		AND n.notice_id = #{noticeId}
+        	</if>
+        ORDER BY
+        n.notice_id DESC
+        <if test='"Y".equals(limited)'>
+            LIMIT 3
+        </if>
+    </select>
+
+    <!-- INSERT -->
+    <insert id="insertNotices" parameterType="com.jeil.delivery.system.domain.NoticesVO">
+    	/* insertShipper */
+        INSERT INTO notices (
+            title, content
+            ,reg_id, chg_id, del_yn
+        ) VALUES (
+            #{param.title}, #{param.content}
+            ,#{memberInfo.memberId}, #{memberInfo.memberId}, 'N'
+        )
+    </insert>
+
+    <!-- UPDATE -->
+    <update id="updateNotices" parameterType="com.jeil.delivery.system.domain.NoticesVO">
+    	/* updateNotices */
+        UPDATE notices
+	        SET
+				title = #{param.title},
+				content = #{param.content},
+	            chg_id = #{memberInfo.memberId},
+	            chg_dt = now()
+	        WHERE
+	        	notice_id = #{param.noticeId}
+    </update>
+
+    <!-- DELETE (Soft Delete) -->
+    <update id="deleteNotices" parameterType="com.jeil.delivery.system.domain.NoticesVO">
+    	/* deleteNotices */
+        UPDATE notices
+	        SET del_yn = 'Y',
+	        	chg_id = #{memberInfo.memberId},
+	            chg_dt = now()
+	        WHERE
+	        	notice_id = #{param.noticeId}
+    </update>
+</mapper>

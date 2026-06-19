@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.rolemenu.mapper.RoleMenuMapper">
+    <resultMap id="RoleMenuResultMap" type="com.common.auth.rolemenu.domain.RoleMenu">
+        <result property="roleId" column="role_id" />
+        <result property="menuId" column="menu_id" />
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+    
+    <resultMap id="RoleMenuResponseMap" type="com.common.auth.rolemenu.dto.RoleMenuResponse">
+        <result property="roleId" column="role_id" />
+        <result property="menuId" column="menu_id" />
+        <result property="roleName" column="role_name"/>
+        <result property="menuName" column="menu_name"/>
+        <result property="parentId" column="parent_id" />
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+    <select id="findByRoleId" resultMap="RoleMenuResultMap">
+        SELECT 
+            role_id, menu_id, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            role_menu
+        WHERE 
+            role_id = #{roleId}
+    </select>
+    
+    <select id="findByMenuId" resultMap="RoleMenuResultMap">
+        SELECT 
+            role_id, menu_id, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            role_menu
+        WHERE 
+            menu_id = #{menuId}
+    </select>
+    
+    <select id="findAllRoleMenus" resultMap="RoleMenuResultMap">
+        SELECT 
+            role_id, menu_id, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            role_menu
+    </select>
+    
+    <select id="selectRoleMenusWithFilter" resultMap="RoleMenuResponseMap">
+        SELECT 
+            rm.role_id, 
+            rm.menu_id, 
+            r.role_name, 
+            m.menu_name,
+            rm.reg_id,
+            rm.reg_dt,
+            rm.chg_id, 
+            rm.chg_dt, 
+            rm.del_id,
+            rm.del_dt,
+            rm.del_yn
+        FROM 
+            role_menu rm
+        INNER JOIN 
+            role r ON rm.role_id = r.role_id
+        INNER JOIN 
+            menu m ON rm.menu_id = m.menu_id
+        <where>
+            <if test="filter.roleIds != null and filter.roleIds.size() > 0">
+                AND rm.role_id IN
+                <foreach collection="filter.roleIds" item="roleId" open="(" close=")" separator=",">
+                    #{roleId}
+                </foreach>
+            </if>
+            <if test="filter.menuIds != null and filter.menuIds.size() > 0">
+                AND rm.menu_id IN
+                <foreach collection="filter.menuIds" item="menuId" open="(" close=")" separator=",">
+                    #{menuId}
+                </foreach>
+            </if>
+            <if test="filter.roleName != null and filter.roleName.trim() != ''">
+                AND r.role_name ILIKE '%' || #{filter.roleName} || '%'
+            </if>
+            <if test="filter.menuName != null and filter.menuName.trim() != ''">
+                AND m.menu_name ILIKE '%' || #{filter.menuName} || '%'
+            </if>
+            <if test="filter.delYn != null">
+                AND rm.del_yn = #{filter.delYn}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectRoleMenuHeadersWithFilter" resultMap="RoleMenuResponseMap">
+        SELECT 
+            rm.role_id, 
+            rm.menu_id, 
+            r.role_name, 
+            m.menu_name,
+            rm.reg_id,
+            rm.reg_dt,
+            rm.chg_id, 
+            rm.chg_dt, 
+            rm.del_id,
+            rm.del_dt,
+            rm.del_yn
+        FROM 
+            role_menu rm
+        INNER JOIN 
+            role r ON rm.role_id = r.role_id AND r.del_yn = 'N'
+        INNER JOIN 
+            menu m ON rm.menu_id = m.menu_id AND m.del_yn = 'N'
+        WHERE 
+            m.parent_id IS NULL
+            AND rm.del_yn = 'N'
+        <if test="filter.roleIds != null and filter.roleIds.size() > 0">
+            AND rm.role_id IN
+            <foreach collection="filter.roleIds" item="roleId" open="(" close=")" separator=",">
+                #{roleId}
+            </foreach>
+        </if>
+        <if test="filter.menuIds != null and filter.menuIds.size() > 0">
+            AND rm.menu_id IN
+            <foreach collection="filter.menuIds" item="menuId" open="(" close=")" separator=",">
+                #{menuId}
+            </foreach>
+        </if>
+        <if test="filter.roleName != null and filter.roleName.trim() != ''">
+            AND r.role_name ILIKE '%' || #{filter.roleName} || '%'
+        </if>
+        <if test="filter.menuName != null and filter.menuName.trim() != ''">
+            AND m.menu_name ILIKE '%' || #{filter.menuName} || '%'
+        </if>
+        <if test="filter.delYn != null and filter.filter.delYn.trim() != ''">
+            AND rm.del_yn = #{filter.delYn}
+        </if>
+    </select>
+
+    <select id="selectAllDescendantRoleMenus" resultMap="RoleMenuResponseMap">
+        WITH RECURSIVE menu_tree AS (
+            SELECT 
+                menu_id, parent_id, menu_name, menu_type, menu_order, 0 as level
+            FROM 
+                menu
+            WHERE 
+                parent_id IN
+                <foreach collection="menuIds" item="menuId" open="(" close=")" separator=",">
+                    #{menuId}
+                </foreach>
+                AND del_yn = 'N'
+            UNION ALL
+            SELECT 
+                m.menu_id, 
+                m.parent_id, 
+                m.menu_name, 
+                m.menu_type, 
+                m.menu_order, 
+                mt.level + 1
+            FROM 
+                menu m
+            INNER JOIN 
+                menu_tree mt ON m.parent_id = mt.menu_id
+            WHERE
+                m.del_yn = 'N'
+        )
+        SELECT 
+            rm.role_id, 
+            rm.menu_id, 
+            r.role_name,    
+            mt.menu_name,
+            mt.parent_id,
+            rm.reg_id,
+            rm.reg_dt,
+            rm.chg_id, 
+            rm.chg_dt, 
+            rm.del_id,
+            rm.del_dt,
+            rm.del_yn
+        FROM 
+            role_menu rm
+        INNER JOIN 
+            role r
+            ON 
+                rm.role_id = r.role_id AND r.del_yn = 'N'
+        INNER JOIN 
+            menu_tree mt 
+            ON 
+                rm.menu_id = mt.menu_id
+        <!-- WHERE
+            rm.del_yn = 'N' -->
+        ORDER BY 
+            rm.role_id, mt.level, mt.menu_order, mt.menu_name
+    </select>
+
+    <insert id="insert" parameterType="com.common.auth.rolemenu.domain.RoleMenu">
+        INSERT INTO 
+            role_menu (role_id, menu_id, reg_id, reg_dt, chg_id, chg_dt, del_yn)
+        VALUES (
+            #{roleId},
+            #{menuId},
+            #{regId},
+            COALESCE(#{regDt}, NOW()),
+            #{chgId},
+            COALESCE(#{chgDt}, NOW()),
+            #{delYn}
+        )
+    </insert>
+    
+    <insert id="insertRoleMenusBulk" parameterType="list">
+        INSERT INTO 
+            role_menu (role_id, menu_id, reg_id, reg_dt, chg_id, chg_dt, del_yn)
+        VALUES
+        <foreach collection="roleMenus" item="roleMenu" separator=",">
+            (
+                #{roleMenu.roleId},
+                #{roleMenu.menuId},
+                #{roleMenu.regId},
+                COALESCE(#{roleMenu.regDt}, NOW()),
+                #{roleMenu.chgId},
+                COALESCE(#{roleMenu.chgDt}, NOW()),
+                #{roleMenu.delYn}
+            )
+        </foreach>
+    </insert>
+    
+    <delete id="deleteByRoleId">
+        DELETE FROM 
+            role_menu
+        WHERE 
+            role_id = #{roleId}
+    </delete>
+    
+    <delete id="deleteByMenuId">
+        DELETE FROM 
+            role_menu
+        WHERE 
+            menu_id = #{menuId}
+    </delete>
+    
+    <delete id="deleteByRoleIdAndMenuId">
+        DELETE FROM 
+            role_menu
+        WHERE 
+            role_id = #{roleId}
+        AND 
+            menu_id = #{menuId}
+    </delete>
+
+    <delete id="deleteRoleMenuByRoleIdAndMenuIdBatch">
+        DELETE FROM 
+            role_menu
+        WHERE 
+            role_id = #{roleId}
+        AND 
+            menu_id = #{menuId}
+    </delete>
+    
+    <select id="existsByRoleIdAndMenuId" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 
+                1 
+            FROM 
+                role_menu
+            WHERE 
+                role_id = #{roleId}
+            AND 
+                menu_id = #{menuId}
+        )
+    </select>
+    
+    <update id="updateRoleMenusBulk" parameterType="list">
+        UPDATE 
+            role_menu
+        SET 
+            del_yn = CASE
+                <foreach collection="roleMenus" item="roleMenu" separator=" ">
+                    <choose>
+                        <when test="roleMenu.delYn != null">
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN #{roleMenu.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE 
+                <foreach collection="roleMenus" item="roleMenu" separator=" ">
+                    <choose>
+                        <when test="roleMenu.chgId != null">
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN #{roleMenu.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="roleMenus" item="roleMenu" separator=" ">
+                    <choose>
+                        <when test="roleMenu.chgDt != null">
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN COALESCE(#{roleMenu.chgDt}, NOW())
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN chg_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = 
+                <foreach collection="roleMenus" item="roleMenu" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="roleMenu.delYn != null and roleMenu.delYn == true">
+                            WHEN role_id = #{roleMenu.roleId} AND menu_id = #{roleMenu.menuId} THEN NULL::uuid
+                        </when>
+                        <when test="roleMenu.delId != null">
+                            WHEN role_id = #{roleMenu.roleId} AND menu_id = #{roleMenu.menuId} THEN #{roleMenu.delId}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{roleMenu.roleId} AND menu_id = #{roleMenu.menuId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_dt = 
+                <foreach collection="roleMenus" item="roleMenu" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="roleMenu.delYn != null and roleMenu.delYn == true">
+                            WHEN role_id = #{roleMenu.roleId} AND menu_id = #{roleMenu.menuId} THEN NULL::timestamp
+                        </when>
+                        <when test="roleMenu.delDt != null">
+                            WHEN role_id = #{roleMenu.roleId} AND menu_id = #{roleMenu.menuId} THEN #{roleMenu.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{roleMenu.roleId} AND menu_id = #{roleMenu.menuId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+        WHERE 
+            (role_id, menu_id) IN 
+            <foreach collection="roleMenus" item="roleMenu" open="(" separator="," close=")">
+                (#{roleMenu.roleId},
+                 #{roleMenu.menuId})
+            </foreach>
+    </update>
+    
+    <select id="findWithFilter" resultMap="RoleMenuResultMap">
+        SELECT 
+            uo.role_id, 
+            uo.menu_id, 
+            m.menu_name, 
+            r.role_name, 
+            uo.reg_id,
+            uo.reg_dt,
+            uo.chg_id, 
+            uo.chg_dt, 
+            uo.del_yn
+        FROM 
+            role_menu uo
+        LEFT JOIN 
+            menu m
+        ON 
+            uo.menu_id = m.menu_id
+        LEFT JOIN 
+            role r
+        ON 
+            uo.role_id = r.role_id
+        <where>
+            <if test="roleIds != null and roleIds.size() > 0">
+                AND uo.role_id IN
+                <foreach collection="roleIds" item="roleId" open="(" close=")" separator=","> #{roleId}
+                </foreach>
+            </if>
+            <if test="menuIds != null and menuIds.size() > 0">
+                AND uo.menu_id IN
+                <foreach collection="menuIds" item="menuId" open="(" close=")" separator=","> #{menuId}
+                </foreach>
+            </if>
+            <if test="menuName != null and menuName.trim() != ''">
+                AND m.menu_name ILIKE '%' || #{menuName} || '%'
+            </if>
+            <if test="roleName != null and roleName.trim() != ''">
+                AND r.role_name ILIKE '%' || #{roleName} || '%'
+            </if>
+            <if test="delYn != null">
+                AND uo.del_yn = #{delYn}
+            </if>
+        </where>
+        ORDER BY uo.reg_dt DESC
+    </select>
+
+    <select id="selectExistingRoleMenusByCompositeKeys" resultMap="RoleMenuResultMap">
+        SELECT 
+            rm.role_id, 
+            rm.menu_id, 
+            rm.reg_id,
+            rm.reg_dt,
+            rm.chg_id, 
+            rm.chg_dt, 
+            rm.del_id,
+            rm.del_dt,
+            rm.del_yn
+        FROM 
+            role_menu rm
+        INNER JOIN
+            role r
+        ON
+            rm.role_id = r.role_id
+        INNER JOIN
+            menu m
+        ON
+            rm.menu_id = m.menu_id
+        WHERE 
+            (rm.role_id, rm.menu_id) IN 
+            <foreach collection="roleMenus" item="roleMenu" open="(" close=")" separator=",">
+                (#{roleMenu.roleId}, #{roleMenu.menuId})
+            </foreach>
+    </select>
+
+    <update id="softDeleteRoleMenusBulk" parameterType="list">
+        UPDATE 
+            role_menu
+        SET 
+            del_yn = CASE
+                <foreach collection="roleMenus" item="roleMenu" separator=" ">
+                    <choose>
+                        <when test="roleMenu.delYn != null">
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN #{roleMenu.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE
+                <foreach collection="roleMenus" item="roleMenu" separator=" ">
+                    <choose>
+                        <when test="roleMenu.chgId != null">
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN #{roleMenu.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE
+                <foreach collection="roleMenus" item="roleMenu" separator=" ">
+                    <choose>
+                        <when test="roleMenu.chgDt != null">
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN COALESCE(#{roleMenu.chgDt}, NOW())
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = CASE
+                <foreach collection="roleMenus" item="roleMenu" separator=" ">
+                    <choose>
+                        <when test="roleMenu.delId != null">
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN #{roleMenu.delId}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_id
+            END,
+            del_dt = CASE
+                <foreach collection="roleMenus" item="roleMenu" separator=" ">
+                    <choose>
+                        <when test="roleMenu.delDt != null">
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN COALESCE(#{roleMenu.delDt}, NOW())
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{roleMenu.roleId}
+                                  AND menu_id = #{roleMenu.menuId})
+                            THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_dt
+            END
+        WHERE 
+            (role_id, menu_id) IN 
+            <foreach collection="roleMenus" item="roleMenu" open="(" close=")" separator=",">
+                (#{roleMenu.roleId}, #{roleMenu.menuId})
+            </foreach>
+    </update>
+</mapper>

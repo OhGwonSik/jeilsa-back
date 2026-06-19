@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.organization.mapper.OrganizationMapper">
+    <resultMap id="organizationResultMap" type="com.common.auth.organization.domain.Organization">
+        <id property="organizationId" column="organization_id" />
+        <result property="organizationName" column="organization_name"/>
+        <result property="description" column="description"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <resultMap id="organizationResponseResultMap" type="com.common.auth.organization.dto.OrganizationResponse">
+        <id property="organizationId" column="organization_id" />
+        <result property="organizationName" column="organization_name"/>
+        <result property="description" column="description"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <select id="selectOrganizationByOrganizationId" resultMap="organizationResultMap">
+        SELECT 
+            organization_id, organization_name, description, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            organization
+        WHERE 
+            organization_id = #{organizationId}
+    </select>
+
+    <select id="selectOrganizationByOrganizationName" resultMap="organizationResultMap">
+        SELECT 
+            organization_id, organization_name, description, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            organization
+        WHERE 
+            organization_name = #{organizationName}
+    </select>
+
+    <select id="selectAllOrganizations" resultMap="organizationResultMap">
+        SELECT 
+            organization_id, organization_name, description, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            organization
+        ORDER BY 
+            organization_name
+    </select>
+
+    <insert id="insertOrganization">
+        INSERT INTO 
+            organization (
+                organization_id, 
+                organization_name, 
+                description, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES (
+            COALESCE(#{organizationId}, gen_random_uuid()),
+            #{organizationName},
+            #{description},
+            #{regId},
+            COALESCE(#{regDt}, NOW()),
+            #{chgId},
+            COALESCE(#{chgDt}, NOW()),
+            #{delYn}
+        )
+    </insert>
+
+    <update id="updateOrganization">
+        UPDATE 
+            organization
+        SET 
+            organization_name = #{organizationName},
+            description = #{description},
+            chg_id = #{chgId},
+            chg_dt = NOW(),
+            del_yn = #{delYn}
+        WHERE 
+            organization_id = #{organizationId}
+    </update>
+
+    <delete id="deleteOrganizationByOrganizationId">
+        DELETE FROM 
+            organization
+        WHERE 
+            organization_id = #{organizationId}
+    </delete>
+
+    <select id="selectOrganizationsWithFilter" resultMap="organizationResponseResultMap">
+        SELECT 
+            organization_id, 
+            organization_name, 
+            description, 
+            reg_id,
+            reg_dt,
+            chg_id, 
+            chg_dt, 
+            del_yn
+        FROM organization
+        <where>
+            <if test="filter.organizationIds != null and filter.organizationIds.size() > 0">
+                AND organization_id IN
+                <foreach collection="filter.organizationIds" item="organizationId" open="(" close=")" separator=",">
+                    #{organizationId}
+                </foreach>
+            </if>
+            <if test="filter.organizationName != null and filter.organizationName.trim() != ''">
+                AND organization_name ILIKE '%' || #{filter.organizationName} || '%'
+            </if>
+            <if test="filter.description != null and filter.description.trim() != ''">
+                AND description ILIKE '%' || #{filter.description} || '%'
+            </if>
+            <if test="filter.delYn != null">
+                AND del_yn = #{filter.delYn}
+            </if>
+        </where>
+    </select>
+    
+    <insert id="insertOrganizationsBatch" parameterType="list">
+        INSERT INTO 
+            organization(
+                organization_id, 
+                organization_name, 
+                description, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES
+        <foreach collection="organizations" item="organization" separator=",">
+            (
+                COALESCE(#{organization.organizationId}, gen_random_uuid()),
+                #{organization.organizationName},
+                #{organization.description},
+                #{organization.regId},
+                COALESCE(#{organization.regDt}, NOW()),
+                #{organization.chgId},
+                COALESCE(#{organization.chgDt}, NOW()),
+                #{organization.delYn}
+            )
+        </foreach>
+    </insert>
+    
+    <update id="updateOrganizationsBatch" parameterType="list">
+        <foreach collection="organizations" item="organization" separator=";">
+            UPDATE 
+                organization
+            SET 
+                organization_name = #{organization.organizationName},
+                description = #{organization.description},
+                chg_id = #{organization.chgId},
+                chg_dt = COALESCE(#{organization.chgDt}, NOW()),
+                del_yn = #{organization.delYn}
+            WHERE organization_id = #{organization.organizationId}
+        </foreach>
+    </update>
+    
+    <!-- Bulk operations - 중복 체크용 메서드들 -->
+    <select id="selectExistOrganizationIdListByOrganizationIds" resultType="int">
+        SELECT 
+            organization_id
+        FROM 
+            organization
+        WHERE 
+            organization_id IN
+            <foreach collection="organizationIds" item="organizationId" open="(" close=")" separator=",">
+                #{organizationId}
+            </foreach>
+    </select>
+    
+    <select id="selectExistOrganizationNameListByOrganizationNames" resultType="string">
+        SELECT 
+            organization_name
+        FROM 
+            organization
+        WHERE 
+            organization_name IN
+            <foreach collection="organizationNames" item="organizationName" open="(" close=")" separator=",">
+                #{organizationName}
+            </foreach>
+    </select>
+    
+    <select id="selectOrganizationListByOrganizationNamesAndNotInOrganizationIds" resultMap="organizationResultMap">
+        SELECT 
+            organization_id, organization_name, description, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            organization
+        <where>
+            <if test="items != null and items.size() > 0">
+                AND (
+                <foreach collection="items" item="item" separator=" OR ">
+                    (organization_name = #{item.organizationName} AND organization_id != #{item.organizationId})
+                </foreach>
+                )
+            </if>
+        </where>
+    </select>
+    
+    <!-- Bulk operations - CRUD 메서드들 -->
+    <insert id="insertOrganizationsBulk" parameterType="list">
+        INSERT INTO 
+            organization (
+                organization_id, 
+                organization_name, 
+                description, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES
+        <foreach collection="organizations" item="organization" separator=",">
+            (
+                #{organization.organizationId},
+                #{organization.organizationName},
+                #{organization.description},
+                #{organization.regId},
+                #{organization.regDt},
+                #{organization.chgId},
+                #{organization.chgDt},
+                #{organization.delYn}
+            )
+        </foreach>
+    </insert>
+    
+    <update id="updateOrganizationsBulk" parameterType="list">
+        UPDATE 
+            organization
+        SET 
+            organization_name = CASE 
+                <foreach collection="organizations" item="organization" separator=" ">
+                    <choose>
+                        <when test="organization.organizationName != null and organization.organizationName.trim() != ''">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.organizationName}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN organization_name
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE organization_name
+            END,
+            description = CASE 
+                <foreach collection="organizations" item="organization" separator=" ">
+                    <choose>
+                        <when test="organization.description != null">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.description}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN description
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE description
+            END,
+            chg_id = CASE 
+                <foreach collection="organizations" item="organization" separator=" ">
+                    <choose>
+                        <when test="organization.chgId != null">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="organizations" item="organization" separator=" ">
+                    <choose>
+                        <when test="organization.chgDt != null">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = 
+                <foreach collection="organizations" item="organization" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="organization.delYn != null and organization.delYn == true">
+                            WHEN organization_id = #{organization.organizationId} THEN NULL::uuid
+                        </when>
+                        <when test="organization.delId != null">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.delId}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_dt = 
+                <foreach collection="organizations" item="organization" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="organization.delYn != null and organization.delYn == true">
+                            WHEN organization_id = #{organization.organizationId} THEN NULL::timestamp
+                        </when>
+                        <when test="organization.delDt != null">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_yn = CASE
+                <foreach collection="organizations" item="organization" separator=" ">
+                    <choose>
+                        <when test="organization.delYn != null">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END
+        WHERE 
+            organization_id IN
+            <foreach collection="organizations" item="organization" open="(" close=")" separator=",">
+                #{organization.organizationId}
+            </foreach>
+    </update>
+    
+    <delete id="deleteOrganizationsBulk" parameterType="list">
+        DELETE FROM 
+            organization
+        WHERE 
+            organization_id IN
+            <foreach collection="organizations" item="organization" open="(" close=")" separator=",">
+                #{organization.organizationId}
+            </foreach>
+    </delete>
+    
+    <update id="softDeleteOrganizationsBulk" parameterType="list">
+        UPDATE 
+            organization
+        SET 
+            del_yn = CASE
+                <foreach collection="organizations" item="organization" separator=" ">
+                    WHEN organization_id = #{organization.organizationId} THEN #{organization.delYn}
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE 
+                <foreach collection="organizations" item="organization" separator=" ">
+                    <choose>
+                        <when test="organization.chgId != null">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="organizations" item="organization" separator=" ">
+                    <choose>
+                        <when test="organization.chgDt != null">
+                            WHEN organization_id = #{organization.organizationId} THEN #{organization.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organization.organizationId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = CASE 
+                <foreach collection="organizations" item="organization" separator=" ">
+                    WHEN organization_id = #{organization.organizationId} THEN #{organization.delId}
+                </foreach>
+                ELSE del_id
+            END,
+            del_dt = CASE 
+                <foreach collection="organizations" item="organization" separator=" ">
+                    WHEN organization_id = #{organization.organizationId} THEN #{organization.delDt}
+                </foreach>
+                ELSE del_dt
+            END
+        WHERE 
+            organization_id IN
+            <foreach collection="organizations" item="organization" open="(" close=")" separator=",">
+                #{organization.organizationId}
+            </foreach>
+    </update>
+</mapper>

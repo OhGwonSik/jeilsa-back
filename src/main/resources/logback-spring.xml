@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %highlight(%-5level)[%thread] %cyan(%F:%L) %logger{80} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- dev, prod에서 적용되는 코드임 -->
+    <springProfile name="!local">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <!-- 여기서 LOG_PATH는 yml에서 설정한 logging.file.path에 있는거 -->
+            <!-- 여기서 LOG_FILE은 yml에서 설정한 logging.file.name에 있는거 -->
+            <file>${LOG_PATH:-logs}/${LOG_FILE}.log</file>
+            <encoder>
+                <pattern>[%d{yyyy-MM-dd HH:mm:ss}:%-3relative][%thread] %-5level %logger{35} - %msg%n</pattern>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_PATH:-logs}/${LOG_FILE}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                    <!-- 파일 최대 용량 100 MB-->
+                    <maxFileSize>100MB</maxFileSize>
+                </timeBasedFileNamingAndTriggeringPolicy>
+                <!-- 파일 보관 기간 -->
+                <maxHistory>30</maxHistory>
+                <!-- 전체 파일의 총 용량 제한 1기가-->
+                <totalSizeCap>1GB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+		<appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		    <file>${LOG_PATH:-logs}/error.log</file>
+
+		    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+		        <level>ERROR</level>
+		    </filter>
+
+		    <encoder>
+		        <pattern>[%d{yyyy-MM-dd HH:mm:ss}:%-3relative][%thread] %-5level %logger{35} - %msg%n</pattern>
+		    </encoder>
+
+		    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+		        <fileNamePattern>${LOG_PATH:-logs}/error.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+
+		        <maxFileSize>100MB</maxFileSize>
+
+		        <maxHistory>30</maxHistory>
+
+		        <totalSizeCap>1GB</totalSizeCap>
+		    </rollingPolicy>
+		</appender>
+    </springProfile>
+
+    <!-- 로컬에서 테스트하려고 작성한 코드임 -->
+    <springProfile name="local">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <!-- 여기서 LOG_PATH는 yml에 logging.file.path에 있는거 -->
+            <!-- 여기서 LOG_FILE은 yml에 logging.file.name에 있는거 -->
+            <file>${LOG_PATH:-logs}/${LOG_FILE}.log</file>
+            <encoder>
+                <pattern>[%d{yyyy-MM-dd HH:mm:ss}:%-3relative][%thread] %-5level %logger{35} - %msg%n</pattern>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_PATH:-logs}/${LOG_FILE}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                    <maxFileSize>100MB</maxFileSize>
+                </timeBasedFileNamingAndTriggeringPolicy>
+                <!-- 파일 보관 기간 TODO 100 -->
+                <maxHistory>30</maxHistory>
+                <!-- 전체 파일의 총 용량 제한 -->
+                <totalSizeCap>1GB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+		<appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		    <file>${LOG_PATH:-logs}/error.log</file>
+
+		    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+		        <level>ERROR</level>
+		    </filter>
+
+		    <encoder>
+		        <pattern>[%d{yyyy-MM-dd HH:mm:ss}:%-3relative][%thread] %-5level %logger{35} - %msg%n</pattern>
+		    </encoder>
+
+		    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+		        <fileNamePattern>${LOG_PATH:-logs}/error.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+
+		        <maxFileSize>100MB</maxFileSize>
+
+		        <maxHistory>30</maxHistory>
+
+		        <totalSizeCap>1GB</totalSizeCap>
+		    </rollingPolicy>
+		</appender>
+    </springProfile>
+
+    <logger name="_org" level="INFO" />
+    <logger name="org.thymeleaf" level="INFO" />
+    <logger name="org.springframework" level="INFO" />
+    <logger name="org.apache.ibatis" level="INFO" />
+
+    <!-- Only log SQL queries -->
+    <logger name="jdbc.sqlonly" level="DEBUG" additivity="false">
+        <appender-ref ref="STDOUT"/>
+<!--        <appender-ref ref="FILE"/>-->
+    </logger>
+
+    <!-- Disable other jdbc logs -->
+    <logger name="jdbc" level="DEBUG" />
+    <logger name="jdbc.connection" level="DEBUG" />
+    <logger name="jdbc.sqltiming" level="OFF" />
+    <logger name="jdbc.audit" level="OFF" />
+    <logger name="jdbc.resultset" level="OFF" />
+    <logger name="org.mariadb.jdbc" level="WARN" />
+    <logger name="com.zaxxer.hikari" level="DEBUG" />
+    <logger name="com.zaxxer.hikari.HikariConfig" level="ERROR" />
+    <logger name="jdbc.resultsettable" level="DEBUG"/><!-- SQL 결과 조회된 데이터의 table을 로그로 남긴다. -->
+
+
+
+
+    <springProfile name="local">
+        <logger name="jdbc.sqlonly" level="DEBUG" />
+        <root level="INFO">
+            <appender-ref ref="STDOUT" />
+            <appender-ref ref="FILE" />
+            <appender-ref ref="ERROR_FILE" />
+        </root>
+    </springProfile>
+    <springProfile name="dev">
+        <logger name="jdbc.sqlonly" level="DEBUG" />
+        <root level="INFO">
+            <appender-ref ref="STDOUT" />
+            <appender-ref ref="FILE" />
+            <appender-ref ref="ERROR_FILE" />
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="jdbc.sqlonly" level="OFF" />
+	    <root level="INFO">
+	        <appender-ref ref="STDOUT" />
+	        <appender-ref ref="FILE" />
+	        <appender-ref ref="ERROR_FILE" />
+	    </root>
+    </springProfile>
+
+</configuration>

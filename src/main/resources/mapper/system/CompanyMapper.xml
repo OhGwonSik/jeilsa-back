@@ -1,0 +1,372 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.system.mapper.CompanyMapper">
+
+	<!-- 사업자등록번호 조회 -->
+	<select id="checkBizNo" resultType="boolean">
+		/* checkBizNo */
+		SELECT EXISTS (
+			SELECT 1
+			FROM company
+			WHERE
+				REPLACE(biz_no, '-', '') = REPLACE(#{bizNo}, '-', '')
+				AND del_yn = 'N'
+		)
+	</select>
+
+    <!-- SELECT -->
+    <select id="selectCompanyList" resultType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* selectCompanyList */
+        SELECT
+            com.company_id, com.biz_no, com.company_nm, com.representative_nm, com.biz_type, com.biz_item,
+            com.address, com.tel_no, com.fax_no, com.email, com.rmk, com.shipper_yn,
+            com.region_cd, cod1.code_nm as region_nm ,com.region_dtl_cd, cod2.code_nm as region_dtl_nm,
+            com.manager_nm, com.manager_tel_no,
+            com.reg_id, com.reg_dt, com.chg_id, com.chg_dt, com.del_yn,
+            shi.shipper_id,
+            shi.use_yn, shi.shipper_cd, cod3.code_nm AS shipper_nm, shi.vat_yn, shi.bill_stdr_cd, shi.taxbil_output_yn,
+            shi.communication_fee, shi.untpc, shi.weight_untpc, shi.bill_company_id, bc.company_nm as bill_company_nm,
+            shi.excclc_company_id, com1.company_nm as excclc_company_nm, shi.bill_char_cd, cdr.delivery_route_id, cdr.delivery_route_cd, dr.delivery_route_nm, dr.delivery_route_nm AS delivery_route_label
+        FROM company com
+        LEFT JOIN shipper shi ON
+        	shi.company_id = com.company_id
+        	AND shi.del_yn = 'N'
+        	AND com.shipper_yn = 'Y'
+		LEFT JOIN bill_company bc ON
+			bc.bill_company_id = shi.bill_company_id
+			AND bc.del_yn = 'N'
+		LEFT JOIN company_delivery_route cdr ON
+			cdr.company_id = com.company_id
+			AND cdr.del_yn = 'N'
+		LEFT JOIN delivery_route dr ON
+			dr.delivery_route_id = cdr.delivery_route_id
+			AND dr.del_yn = 'N'
+		LEFT JOIN company com1 ON
+			com1.company_id = shi.excclc_company_id
+			AND com1.del_yn = 'N'
+		LEFT JOIN code cod1 ON
+			cod1.code_val = com.region_cd
+			AND cod1."type" = 'REGION_TYPE'
+			AND cod1.del_yn = 'N'
+		LEFT JOIN code cod2 ON
+			cod2.code_val = com.region_dtl_cd
+			AND cod2.parnts_code_val = com.region_cd
+			AND cod2."type" = 'REGION_DTL_TYPE'
+			AND cod2.del_yn = 'N'
+		LEFT JOIN code cod3 ON
+			cod3.CODE_VAL = shi.shipper_cd
+			AND cod3.del_yn = 'N'
+        WHERE
+        	1=1
+        	<if test='companyId != null and companyId != ""'>
+        		AND com.company_id = #{companyId}
+        	</if>
+            <!-- 업체검색 : 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+            <if test="companyNm != null and companyNm != ''">
+                AND (
+                com.company_nm ILIKE CONCAT('%', #{companyNm}, '%')
+                OR (
+                LENGTH(regexp_replace(#{companyNm}, '[^0-9]', '', 'g')) = 4
+                AND (
+                RIGHT(regexp_replace(COALESCE(com.tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{companyNm}, '[^0-9]', '', 'g')
+                OR
+                RIGHT(regexp_replace(COALESCE(com.manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{companyNm}, '[^0-9]', '', 'g')
+                )
+                )
+                )
+            </if>
+            <if test='telNo != null and telNo != ""'>
+        		AND com.tel_no like CONCAT('%',#{telNo},'%')
+        	</if>
+        	<if test='shipperYn != null and shipperYn != ""'>
+        		AND com.shipper_yn = #{shipperYn}
+        	</if>
+        	<if test='shipperCd != null and shipperCd != ""'>
+        		AND shi.shipper_cd = #{shipperCd}
+        	</if>
+        	<if test='regionCd != null and regionCd != ""'>
+        		AND com.region_cd = #{regionCd}
+        	</if>
+        	<if test='billCompanyId != null and billCompanyId != ""'>
+        		AND shi.bill_company_id = #{billCompanyId}
+        	</if>
+            <if test='isUser == true'>
+                AND com.company_id = #{userCompanyId}
+            </if>
+       	ORDER BY com.del_yn, com.company_id DESC
+    </select>
+
+    <!-- SELECT -->
+    <select id="selectCompanyById" resultType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* selectCompanyById */
+        SELECT
+            com.company_id, com.biz_no, com.company_nm, com.representative_nm, com.biz_type, com.biz_item
+            , com.address, com.tel_no, com.fax_no, com.email, com.rmk, com.shipper_yn
+            , com.region_cd, com.region_dtl_cd
+            , com.manager_nm, com.manager_tel_no
+            , com.reg_id, com.reg_dt, com.chg_id, com.chg_dt, com.del_yn
+            , cdr.delivery_route_id
+        FROM
+        	company com
+        LEFT JOIN company_delivery_route cdr ON
+				cdr.company_id = com.company_id
+				AND cdr.del_yn = 'N'
+        WHERE
+        	com.company_id = #{companyId}
+    </select>
+
+    <!-- SELECT invoice -->
+	<select id="selectInvoiceCompanyById" resultType="com.jeil.delivery.system.domain.CompanyDTO">
+	    /* selectInvoiceCompanyById */
+	    SELECT
+	        com.company_id, com.biz_no, com.company_nm, com.representative_nm, com.biz_type, com.biz_item
+	        , com.address, com.tel_no, com.fax_no, com.email, com.rmk, com.shipper_yn
+	        , com.region_cd, com.region_dtl_cd
+	        , com.manager_nm, com.manager_tel_no
+	        , CASE WHEN shi.shipper_cd = 'COM' THEN shi.communication_fee ELSE 0 END AS communication_fee
+	        , CASE WHEN shi.shipper_cd = 'COM' THEN shi.communication_fee * 0.1 ELSE 0 END AS communication_fee_vat
+	        , CASE
+	            WHEN #{billCd} = '20' THEN to_char( ( (#{year} || '-' || #{month} || '-01')::date - INTERVAL '1 month' ) + INTERVAL '20 days', 'YYYY-MM-DD' )
+	            ELSE to_char((#{year} || '-' || #{month} || '-01')::date, 'YYYY-MM-DD')
+	          END AS startDate
+	        , CASE
+	            WHEN #{billCd} = '20' THEN to_char( ( (#{year} || '-' || #{month} || '-20')::date ), 'YYYY-MM-DD' )
+	            ELSE to_char( ( ( (#{year} || '-' || #{month} || '-01')::date + INTERVAL '1 month' ) - INTERVAL '1 day' ), 'YYYY-MM-DD')
+	          END AS endDate
+	        , com.reg_id, com.reg_dt, com.chg_id, com.chg_dt, com.del_yn
+	    FROM company com
+	    LEFT JOIN shipper shi ON
+	    	shi.company_id = com.company_id
+	    WHERE com.del_yn = 'N'
+	    AND com.company_id = #{calculationCompanyId}
+	</select>
+
+	<select id="checkCompanyByCompanyNm" resultType="java.lang.Boolean">
+		SELECT CASE WHEN COUNT(1) > 0 THEN TRUE ELSE FALSE END
+		FROM company
+		WHERE trim(company_nm) = trim(#{companyNm})
+	</select>
+
+	<select id="selectCompanyByCompanyNm" resultType="com.jeil.delivery.system.domain.CompanyDTO">
+		SELECT com.company_id, com.biz_no, com.company_nm, com.representative_nm, com.biz_type, com.biz_item
+		, com.address, com.tel_no, com.fax_no, com.email, com.rmk, com.shipper_yn
+		, com.region_cd, com.region_dtl_cd
+		, com.manager_nm, com.manager_tel_no
+		, com.reg_id, com.reg_dt, com.chg_id, com.chg_dt, com.del_yn
+		FROM company com
+		WHERE trim(company_nm) = trim(#{companyNm})
+	</select>
+    <select id="selectCompanyListPaged"
+            parameterType="com.jeil.delivery.deliverylogic.domain.CompanySearchCond"
+            resultType="com.jeil.delivery.system.domain.CompanyDTO">
+        SELECT
+        com.company_id, com.biz_no, com.company_nm, com.representative_nm, com.biz_type, com.biz_item,
+        com.address, com.tel_no, com.fax_no, com.email, com.rmk, com.shipper_yn,
+        com.region_cd, cod1.code_nm as region_nm ,com.region_dtl_cd, cod2.code_nm as region_dtl_nm,
+        com.manager_nm, com.manager_tel_no,
+        com.reg_id, com.reg_dt, com.chg_id, com.chg_dt, com.del_yn,
+        shi.shipper_id,
+        shi.use_yn, shi.shipper_cd, cod3.code_nm AS shipper_nm, shi.vat_yn, shi.bill_stdr_cd, shi.taxbil_output_yn,
+        shi.communication_fee, shi.untpc, shi.weight_untpc, shi.bill_company_id, bc.company_nm as bill_company_nm,
+        shi.excclc_company_id, com1.company_nm as excclc_company_nm, shi.bill_char_cd,
+        cdr.delivery_route_id, cdr.delivery_route_cd, dr.delivery_route_nm, dr.delivery_route_nm AS delivery_route_label
+        FROM company com
+        LEFT JOIN shipper shi ON shi.company_id = com.company_id AND shi.del_yn = 'N' AND com.shipper_yn = 'Y'
+        LEFT JOIN bill_company bc ON bc.bill_company_id = shi.bill_company_id AND bc.del_yn = 'N'
+        LEFT JOIN company_delivery_route cdr ON cdr.company_id = com.company_id AND cdr.del_yn = 'N'
+        LEFT JOIN delivery_route dr ON dr.delivery_route_id = cdr.delivery_route_id AND dr.del_yn = 'N'
+        LEFT JOIN company com1 ON com1.company_id = shi.excclc_company_id AND com1.del_yn = 'N'
+        LEFT JOIN code cod1 ON cod1.code_val = com.region_cd AND cod1."type" = 'REGION_TYPE' AND cod1.del_yn = 'N'
+        LEFT JOIN code cod2 ON cod2.code_val = com.region_dtl_cd AND cod2.parnts_code_val = com.region_cd AND cod2."type" = 'REGION_DTL_TYPE' AND cod2.del_yn = 'N'
+        LEFT JOIN code cod3 ON cod3.CODE_VAL = shi.shipper_cd AND cod3.del_yn = 'N'
+        <where>
+            <if test='companyId != null and companyId != ""'>
+                AND com.company_id = #{companyId}
+            </if>
+            <!-- 업체명/전화 복합검색: 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+            <if test="companyNm != null and companyNm != ''">
+                AND (
+                com.company_nm ILIKE CONCAT('%', #{companyNm}, '%')
+                OR (
+                LENGTH(regexp_replace(#{companyNm}, '[^0-9]', '', 'g')) = 4
+                AND (
+                RIGHT(regexp_replace(COALESCE(com.tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{companyNm}, '[^0-9]', '', 'g')
+                OR
+                RIGHT(regexp_replace(COALESCE(com.manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{companyNm}, '[^0-9]', '', 'g')
+                )
+                )
+                )
+            </if>
+            <if test='telNo != null and telNo != ""'>
+                AND com.tel_no LIKE CONCAT('%', #{telNo}, '%')
+            </if>
+
+            <if test='shipperYn != null and shipperYn != ""'>
+                AND com.shipper_yn = #{shipperYn}
+            </if>
+
+            <if test='shipperCd != null and shipperCd != ""'>
+                AND shi.shipper_cd = #{shipperCd}
+            </if>
+
+            <if test='regionCd != null and regionCd != ""'>
+                AND com.region_cd = #{regionCd}
+            </if>
+            <if test='billCompanyId != null and billCompanyId != ""'>
+                AND shi.bill_company_id = #{billCompanyId}
+            </if>
+            <if test="isUser != null and isUser and userCompanyId != null and userCompanyId > 0">
+                AND com.company_id = #{userCompanyId}
+            </if>
+        </where>
+        ORDER BY ${orderBy}
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="countCompanyList"
+            parameterType="com.jeil.delivery.deliverylogic.domain.CompanySearchCond"
+            resultType="int">
+        SELECT COUNT(1)
+        FROM company com
+        LEFT JOIN shipper shi ON shi.company_id = com.company_id AND shi.del_yn = 'N' AND com.shipper_yn = 'Y'
+        <where>
+            <if test='companyId != null and companyId != ""'>
+                AND com.company_id = #{companyId}
+            </if>
+
+            <!-- companyNm 복합검색: count에도 동일 적용 -->
+            <if test="companyNm != null and companyNm != ''">
+                AND (
+                com.company_nm ILIKE CONCAT('%', #{companyNm}, '%')
+                OR (
+                LENGTH(regexp_replace(#{companyNm}, '[^0-9]', '', 'g')) > 0
+                AND (
+                regexp_replace(COALESCE(com.tel_no, ''), '[^0-9]', '', 'g')
+                LIKE CONCAT('%', regexp_replace(#{companyNm}, '[^0-9]', '', 'g'), '%')
+                OR regexp_replace(COALESCE(com.manager_tel_no, ''), '[^0-9]', '', 'g')
+                LIKE CONCAT('%', regexp_replace(#{companyNm}, '[^0-9]', '', 'g'), '%')
+                )
+                )
+                )
+            </if>
+
+            <if test='telNo != null and telNo != ""'>
+                AND com.tel_no LIKE CONCAT('%', #{telNo}, '%')
+            </if>
+
+            <if test='shipperYn != null and shipperYn != ""'>
+                AND com.shipper_yn = #{shipperYn}
+            </if>
+
+            <if test='shipperCd != null and shipperCd != ""'>
+                AND shi.shipper_cd = #{shipperCd}
+            </if>
+
+            <if test='regionCd != null and regionCd != ""'>
+                AND com.region_cd = #{regionCd}
+            </if>
+            <if test='billCompanyId != null and billCompanyId != ""'>
+                AND shi.bill_company_id = #{billCompanyId}
+            </if>
+            <if test="isUser != null and isUser and userCompanyId != null and userCompanyId > 0">
+                AND com.company_id = #{userCompanyId}
+            </if>
+        </where>
+    </select>
+
+
+
+    <!-- INSERT -->
+    <insert id="insertCompany" parameterType="com.jeil.delivery.system.domain.CompanyVO" useGeneratedKeys="true" keyProperty="param.companyId" keyColumn="company_id">
+    	/* insertCompany */
+        INSERT INTO company (
+            biz_no, company_nm, representative_nm, biz_type, biz_item,
+            address, tel_no, fax_no, email, rmk, shipper_yn,
+            region_cd, region_dtl_cd,
+            manager_nm, manager_tel_no,
+            reg_id, chg_id, del_yn
+        ) VALUES (
+            REPLACE(#{param.bizNo},'-',''), #{param.companyNm}, #{param.representativeNm}, #{param.bizType}, #{param.bizItem},
+            #{param.address}, REPLACE(#{param.telNo},'-',''), REPLACE(#{param.faxNo},'-',''), #{param.email}, #{param.rmk}, #{param.shipperYn},
+        NULLIF (#{param.regionCd}, ''),
+        NULLIF (#{param.regionDtlCd}, ''),
+        #{param.managerNm}, REPLACE(#{param.managerTelNo},'-',''),
+            #{memberInfo.memberId}, #{memberInfo.memberId}, #{param.delYn}
+        )
+    </insert>
+
+    <!-- UPDATE -->
+    <update id="updateCompany" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* updateCompany */
+        UPDATE company
+	        SET
+	            biz_no = REPLACE(#{param.bizNo},'-',''),
+	            company_nm = #{param.companyNm},
+	            representative_nm = #{param.representativeNm},
+	            biz_type = #{param.bizType},
+	            biz_item = #{param.bizItem},
+	            address = #{param.address},
+	            tel_no = REPLACE(#{param.telNo},'-',''),
+	            fax_no = REPLACE(#{param.faxNo},'-',''),
+	            email = #{param.email},
+	            rmk = #{param.rmk},
+	            shipper_yn = #{param.shipperYn},
+	            region_cd = NULLIF(#{param.regionCd}, ''),
+	            region_dtl_cd = NULLIF(#{param.regionDtlCd}, ''),
+	            manager_nm = #{param.managerNm},
+	            manager_tel_no = REPLACE(#{param.managerTelNo},'-',''),
+	            chg_id = #{memberInfo.memberId},
+	            chg_dt = now(),
+				del_yn = #{param.delYn}
+	        WHERE company_id = #{param.companyId}
+    </update>
+
+    <!-- DELETE (Soft Delete) -->
+    <update id="deleteCompany" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+        UPDATE company
+	        SET del_yn = 'Y',
+	            chg_id = #{memberInfo.memberId},
+	            chg_dt = now()
+	        WHERE company_id = #{param.companyId}
+    </update>
+
+
+    <!--
+    	company_delete_tmp에서 데이터를 꺼낼때 조건에 회사 ID로 조회후 data_json에서 밑에처럼 조회
+    	(data_json -> 'company') AS company_data,
+	    (data_json -> 'shipper') AS shipper_list,
+	    (data_json -> 'delivery_routes') AS delivery_routes
+     -->
+    <!-- 삭제할 회사, 화주, 회사_배송코스매핑 정보 저장 -->
+    <insert id="insertCompanyDeleteBackup" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* insertCompanyDeleteBackup */
+		INSERT INTO company_delete_tmp (company_id, data_json, reg_id, chg_id)
+		SELECT
+		    c.company_id
+		    , jsonb_build_object(
+		        'company', to_jsonb(c),
+		        'shipper', COALESCE(
+		            (SELECT jsonb_agg(to_jsonb(s)) FROM shipper s WHERE s.company_id = c.company_id),
+		            '[]'::jsonb
+		        ),
+		        'delivery_routes', COALESCE(
+		            (SELECT jsonb_agg(to_jsonb(dr)) FROM company_delivery_route dr WHERE dr.company_id = c.company_id),
+		            '[]'::jsonb
+		        )
+		    )
+		    , #{memberInfo.memberId}
+		    , #{memberInfo.memberId}
+		FROM company c
+		WHERE c.company_id = #{param.companyId}
+    </insert>
+
+    <!-- DELETE (Hard Delete) -->
+    <delete id="deleteCompanyById" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* deleteCompanyById */
+    	DELETE FROM company WHERE company_id = #{companyId}
+    </delete>
+</mapper>

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.deliverylogic.mapper.TransportDtlMapper">
+    <!-- SELECT -->
+    <select id="selectTransportDtlList" resultType="com.jeil.delivery.deliverylogic.domain.TransportDtlVO">
+        SELECT
+        transport_dtl_id,
+        transport_id,
+        untpc,
+        qty,
+        amount,
+        shipment_operation_date,
+        calculation_cd,
+        sender_receiver_cd,
+        waybill_no,
+        kind_cd,
+        rmk,
+        reg_id,
+        reg_dt,
+        chg_id,
+        chg_dt,
+        del_yn
+        FROM transport_dtl
+        WHERE del_yn = 'N'
+        <if test="senderReceiverCd != null">
+            AND sender_receiver_cd = #{senderReceiverCd}
+        </if>
+        <if test="transportDtlId != null">
+            AND transport_dtl_id = #{transportDtlId}
+        </if>
+        <if test="transportId != null">
+            AND transport_id = #{transportId}
+        </if>
+        <if test="waybillNo != null">
+            AND waybill_no = #{waybillNo}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND CAST(shipment_operation_date AS DATE) &gt;= CAST(#{startDate} AS DATE)
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND CAST(shipment_operation_date AS DATE) &lt; CAST(#{endDate} AS DATE) + INTERVAL '1 day'
+        </if>
+        order by transport_dtl_id desc
+    </select>
+
+    <!-- INSERT -->
+    <insert id="insertTransportDtl"
+            parameterType="com.jeil.delivery.deliverylogic.domain.TransportDtlVO"
+            useGeneratedKeys="true"
+            keyProperty="transportDtlId"
+            keyColumn="transport_dtl_id">
+        INSERT INTO transport_dtl (
+        transport_id,
+        calculation_cd,
+        sender_receiver_cd,
+        calculation_target_cd,
+        waybill_no,
+        kind_cd,
+        untpc,
+        qty,
+        amount,
+        rmk,
+        shipment_operation_date,
+        reg_id,
+        reg_dt,
+        chg_id,
+        chg_dt,
+        del_yn
+        ) VALUES (
+        #{transportId},
+        #{calculationCd},
+        #{senderReceiverCd},
+        #{calculationTargetCd},
+        #{waybillNo},
+        #{kindCd},
+        #{untpc},
+        #{qty},
+        #{amount},
+        #{rmk},
+        #{shipmentOperationDate},
+        #{regId},
+        NOW(),
+        #{chgId},
+        NOW(),
+        'N'
+        )
+    </insert>
+
+    <!-- UPDATE -->
+    <update id="updateTransportDtl"
+            parameterType="com.jeil.delivery.deliverylogic.domain.TransportDtlVO">
+        UPDATE transport_dtl
+        SET
+        transport_id            = #{transportId},
+        calculation_cd          = #{calculationCd},
+        waybill_no              = #{waybillNo},
+        kind_cd                 = #{kindCd},
+        untpc                   = #{untpc},
+        qty                     = #{qty},
+        amount                  = #{amount},
+        rmk                     = #{rmk},
+        chg_id                  = #{chgId},
+        chg_dt                  = NOW()
+        WHERE transport_dtl_id = #{transportDtlId}
+    </update>
+
+    <!-- DELETE (Soft Delete) -->
+    <update id="deleteTransportDtl">
+        UPDATE transport_dtl
+        SET del_yn = 'Y',
+        chg_id = #{chgId},
+        chg_dt = NOW()
+        WHERE transport_dtl_id IN
+        <foreach item="id" collection="ids" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <update id="deleteTransportDtlAll">
+        UPDATE transport_dtl
+        SET del_yn = 'Y',
+        chg_id = #{chgId},
+        chg_dt = NOW()
+        WHERE transport_id = #{transportId}
+    </update>
+
+    <update id="delete">
+        UPDATE transport_dtl
+        SET del_yn = 'Y',
+        chg_id = #{chgId},
+        chg_dt = NOW()
+        WHERE transport_id = #{transportId}
+    </update>
+</mapper>

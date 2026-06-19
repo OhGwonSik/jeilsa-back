@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.mapper.MemberMapper">
+	<resultMap id="MemberRoleResultMap" type="com.common.auth.userrole.domain.UserRole">
+		<id property="memberId" column="member_id" />
+		<id property="roleId" column="role_id" />
+		<result property="regId" column="reg_id" />
+		<result property="regDt" column="reg_dt"/>
+		<result property="chgId" column="chg_id" />
+		<result property="chgDt" column="chg_dt"/>
+		<result property="delId" column="del_id" />
+		<result property="delDt" column="del_dt"/>
+		<result property="delYn" column="del_yn"/>
+	</resultMap>
+
+	<sql id="memberColumns">
+		member_id, company_id,
+		user_id, user_pw, "name", email, tel_no,
+		reg_id, reg_dt, chg_id, chg_dt, del_yn
+	</sql>
+
+	<select id="selectMemberDetailById" resultType="com.jeil.delivery.domain.MemberDTO">
+		/* selectMemberDetailById */
+		SELECT
+			me.member_id, me.company_id,
+			, me.user_id, me.user_pw, me."name", me.email, me.tel_no, me.del_yn
+		FROM
+			member me
+		WHERE
+			me.member_id = #{memberId}
+	</select>
+
+	<!-- SELECT -->
+	<select id="selectMemberList" resultType="com.jeil.delivery.domain.MemberDTO">
+		SELECT
+		m.member_id,
+		m.company_id,
+		m.user_id,
+		m.name,
+		m.email,
+		m.tel_no,
+		m.reg_id,
+		m.reg_dt,
+		m.chg_id,
+		m.chg_dt,
+		m.del_yn,
+		c.company_nm,
+		ur.role_id
+		FROM member m
+		LEFT JOIN company c ON m.company_id = c.company_id
+		LEFT JOIN user_role ur ON m.member_id = ur.member_id
+		AND ur.del_yn = 'N'
+		WHERE 1 = 1
+		<if test="memberId != null and memberId != 0">
+			AND m.member_id = #{memberId}
+		</if>
+		<if test="name != null">
+			AND m.name LIKE CONCAT('%', #{name}, '%')
+		</if>
+		<if test="telNo != null">
+			AND m.tel_no LIKE CONCAT('%', #{telNo}, '%')
+		</if>
+		<if test="selfOnly">
+			AND m.member_id = #{memberId}
+		</if>
+		ORDER BY m.member_id DESC
+	</select>
+
+	<!-- INSERT -->
+	<insert id="insertMember"
+			parameterType="com.jeil.delivery.domain.MemberDTO"
+			useGeneratedKeys="true"
+			keyProperty="memberId"
+			keyColumn="member_id">
+		INSERT INTO member (
+		company_id,
+		user_id,
+		user_pw,
+		name,
+		email,
+		tel_no,
+		reg_id,
+		reg_dt,
+		chg_id,
+		chg_dt,
+		del_yn
+		) VALUES (
+		#{companyId},
+		#{userId},
+		#{userPw},
+		#{name},
+		#{email},
+		REPLACE(#{telNo}, '-', ''),
+		#{regId},
+		NOW(),
+		#{chgId},
+		NOW(),
+		'N'
+		)
+	</insert>
+	<insert id="insertUserRolesBulk">
+		INSERT INTO
+		user_role (
+		member_id, role_id, reg_id, reg_dt, chg_id, chg_dt, del_yn
+		)
+		VALUES
+		<foreach collection="userRoles" item="userRole" separator=",">
+			(
+			#{userRole.memberId},
+			#{userRole.roleId},
+			#{userRole.regId},
+			NOW(),
+			#{userRole.chgId},
+			NOW(),
+			#{userRole.delYn}
+			)
+		</foreach>
+	</insert>
+
+	<update id="updateUserRolesBulk" parameterType="java.util.List">
+		UPDATE
+		user_role
+		SET
+		chg_id = CASE
+		<foreach collection="userRoles" item="userRole" separator=" ">
+			<choose>
+				<when test="userRole.chgId != null">
+					WHEN member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId}
+					THEN #{userRole.chgId}
+				</when>
+				<otherwise>
+					WHEN member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId}
+					THEN chg_id
+				</otherwise>
+			</choose>
+		</foreach>
+		ELSE chg_id
+		END,
+		chg_dt = CASE
+		<foreach collection="userRoles" item="userRole" separator=" ">
+			<choose>
+				<when test="userRole.chgDt != null">
+					WHEN member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId}
+					THEN COALESCE(#{userRole.chgDt}, NOW())
+				</when>
+				<otherwise>
+					WHEN member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId}
+					THEN chg_dt
+				</otherwise>
+			</choose>
+		</foreach>
+		ELSE chg_dt
+		END,
+		del_id =
+		<foreach collection="userRoles" item="userRole" open="CASE" separator=" " close="END">
+			<choose>
+				<when test="userRole.delYn != null">
+					<choose>
+						<when test="userRole.delYn.equals('Y')">
+							WHEN member_id = #{userRole.memberId}
+							AND role_id   = #{userRole.roleId}
+							THEN #{userRole.delId}
+						</when>
+						<when test="userRole.delYn.equals('N')">
+							WHEN member_id = #{userRole.memberId}
+							AND role_id   = #{userRole.roleId}
+							THEN NULL
+						</when>
+						<otherwise>
+							WHEN member_id = #{userRole.memberId}
+							AND role_id   = #{userRole.roleId}
+							THEN del_id
+						</otherwise>
+					</choose>
+				</when>
+				<otherwise>
+					WHEN member_id = #{userRole.memberId}
+					AND role_id   = #{userRole.roleId}
+					THEN del_id
+				</otherwise>
+			</choose>
+		</foreach>,
+		del_dt =
+		<foreach collection="userRoles" item="userRole" open="CASE" separator=" " close="END">
+			<choose>
+				<when test="userRole.delYn != null">
+					<choose>
+						<when test="userRole.delYn.equals('Y')">
+							WHEN member_id = #{userRole.memberId}
+							AND role_id   = #{userRole.roleId}
+							THEN COALESCE(#{userRole.delDt}, NOW())
+						</when>
+						<when test="userRole.delYn.equals('N')">
+							WHEN member_id = #{userRole.memberId}
+							AND role_id   = #{userRole.roleId}
+							THEN NULL::timestamp
+						</when>
+						<otherwise>
+							WHEN member_id = #{userRole.memberId}
+							AND role_id   = #{userRole.roleId}
+							THEN del_dt
+						</otherwise>
+					</choose>
+				</when>
+				<otherwise>
+					WHEN member_id = #{userRole.memberId}
+					AND role_id   = #{userRole.roleId}
+					THEN del_dt
+				</otherwise>
+			</choose>
+		</foreach>,
+		del_yn = CASE
+		<foreach collection="userRoles" item="userRole" separator=" ">
+			<choose>
+				<when test="userRole.delYn != null">
+					WHEN member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId}
+					THEN #{userRole.delYn, jdbcType=CHAR}
+				</when>
+				<otherwise>
+					WHEN member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId}
+					THEN del_yn
+				</otherwise>
+			</choose>
+		</foreach>
+		ELSE del_yn
+		END
+		WHERE
+		(member_id, role_id) IN
+		<foreach collection="userRoles" item="userRole" open="(" close=")" separator=",">
+			(#{userRole.memberId}, #{userRole.roleId})
+		</foreach>
+	</update>
+
+	<update id="softDeleteUserRolesBulk" parameterType="list">
+		UPDATE
+		user_role
+		SET
+		del_yn = CASE
+		<foreach collection="userRoles" item="userRole" separator=" ">
+			<choose>
+				<when test="userRole.delYn != null">
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN #{userRole.delYn}
+				</when>
+				<otherwise>
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN del_yn
+				</otherwise>
+			</choose>
+		</foreach>
+		ELSE del_yn
+		END,
+		chg_id = CASE
+		<foreach collection="userRoles" item="userRole" separator=" ">
+			<choose>
+				<when test="userRole.chgId != null">
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN #{userRole.chgId}
+				</when>
+				<otherwise>
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN chg_id
+				</otherwise>
+			</choose>
+		</foreach>
+		ELSE chg_id
+		END,
+		chg_dt = CASE
+		<foreach collection="userRoles" item="userRole" separator=" ">
+			<choose>
+				<when test="userRole.chgDt != null">
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN COALESCE(#{userRole.chgDt}, NOW())
+				</when>
+				<otherwise>
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN NOW()
+				</otherwise>
+			</choose>
+		</foreach>
+		ELSE chg_dt
+		END,
+		del_id = CASE
+		<foreach collection="userRoles" item="userRole" separator=" ">
+			<choose>
+				<when test="userRole.delId != null">
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN #{userRole.delId}
+				</when>
+				<otherwise>
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN del_id
+				</otherwise>
+			</choose>
+		</foreach>
+		ELSE del_id
+		END,
+		del_dt = CASE
+		<foreach collection="userRoles" item="userRole" separator=" ">
+			<choose>
+				<when test="userRole.delDt != null">
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN COALESCE(#{userRole.delDt}, NOW())
+				</when>
+				<otherwise>
+					WHEN (member_id = #{userRole.memberId}
+					AND role_id = #{userRole.roleId})
+					THEN NOW()
+				</otherwise>
+			</choose>
+		</foreach>
+		ELSE del_dt
+		END
+		WHERE
+		(member_id, role_id) IN
+		<foreach collection="userRoles" item="userRole" open="(" close=")" separator=",">
+			(#{userRole.memberId}, #{userRole.roleId})
+		</foreach>
+	</update>
+	<!-- UPDATE -->
+	<update id="updateMember" parameterType="com.jeil.delivery.domain.MemberDTO">
+		UPDATE member
+		SET
+		<if test='companyId != 0 and companyId != null'>
+			company_id = #{companyId},
+		</if>
+		<if test="userPw != null and userPw != ''">
+			user_pw = #{userPw},
+		</if>
+		name = #{name},
+		email = #{email},
+		tel_no = REPLACE(#{telNo}, '-', ''),
+		chg_id = #{chgId},
+		del_yn = #{delYn},
+		chg_dt = NOW()
+		WHERE member_id = #{memberId}
+		<if test="selfOnly">
+			AND member_id = #{chgId}
+		</if>
+	</update>
+
+	<!-- DELETE (Soft Delete) -->
+	<update id="deleteMember" parameterType="com.jeil.delivery.domain.MemberDTO">
+		UPDATE member
+		SET del_yn = 'Y',
+		chg_id = #{chgId},
+		chg_dt = NOW()
+		WHERE member_id = #{memberId}
+	</update>
+
+	<select id="checkUserId" resultType="boolean">
+		/* checkUserId */
+		SELECT EXISTS (
+		SELECT 1
+		FROM member
+		WHERE
+		user_id = #{userId}
+		AND del_yn = 'N'
+		)
+	</select>
+    <select id="selectUserByUserId" resultType="com.jeil.delivery.domain.MemberDTO">
+		SELECT
+			mem.member_id, mem.company_id AS user_company_id,
+			mem.user_id, mem.user_pw, mem."name", mem.email, mem.tel_no,
+			mem.reg_id, mem.reg_dt, mem.chg_id, mem.chg_dt, mem.del_yn,
+			ro.role_name AS roles
+		FROM member mem
+		LEFT JOIN user_role ur ON
+			ur.member_id = mem.member_id
+			AND ur.del_yn = 'N'
+		LEFT JOIN role ro ON
+			ro.role_id = ur.role_id
+			AND ro.del_yn = 'N'
+		WHERE mem.user_id = #{userId}
+		LIMIT 1
+	</select>
+	<select id="selectUserBymemberId" resultType="com.jeil.delivery.domain.MemberDTO">
+		SELECT
+			mem.member_id, mem.company_id AS user_company_id,
+			mem.user_id, mem.user_pw, mem."name", mem.email, mem.tel_no,
+			mem.reg_id, mem.reg_dt, mem.chg_id, mem.chg_dt, mem.del_yn,
+			ro.role_name AS roles
+		FROM member mem
+		LEFT JOIN user_role ur ON
+			ur.member_id = mem.member_id
+			AND ur.del_yn = 'N'
+		LEFT JOIN role ro ON
+			ro.role_id = ur.role_id
+			AND ro.del_yn = 'N'
+		WHERE mem.member_id = #{memberId}
+		AND mem.del_yn = 'N'
+		LIMIT 1
+	</select>
+	<select id="selectExistsByUserId" resultType="java.lang.Boolean">
+		SELECT
+		EXISTS(
+		SELECT
+		1
+		FROM
+		user
+		WHERE
+		member_id = #{memberId}
+		)
+	</select>
+	<select id="selectMemberIdByUserId"
+			parameterType="string"
+			resultType="int">
+		SELECT COALESCE(MAX(member_id), 0)
+		FROM member
+		WHERE user_id = #{userId}
+	</select>
+
+	<sql id="memeberColumns">
+		member_id, user_id, name, email, user_pw, tel_no,
+		last_login_dt, login_fail_cnt, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+	</sql>
+
+	<select id="selectUsersWithFilter" resultType="com.common.auth.user.dto.UserResponse">
+		SELECT
+		<include refid="memberColumns" />
+		FROM
+		member
+		<where>
+			<if test="filter.memberIds != null and filter.memberIds.size() > 0">
+				AND member_id IN
+				<foreach collection="filter.memberIds" item="memberId" open="(" close=")" separator=",">
+					#{memberId}
+				</foreach>
+			</if>
+			<if test="filter.name != null and filter.name.trim() != ''">
+				AND name ILIKE '%' || #{filter.name} || '%'
+			</if>
+			<if test="filter.email != null and filter.email.trim() != ''">
+				AND email ILIKE '%' || #{filter.email} || '%'
+			</if>
+			<if test="filter.telNo != null and filter.telNo.trim() != ''">
+				AND telNo ILIKE '%' || #{filter.telNo} || '%'
+			</if>
+			<if test="filter.delYn != null and filter.delYn.trim() != ''">
+				AND del_yn = #{filter.delYn}
+			</if>
+		</where>
+	</select>
+	<select id="selectUserRolesWithFilter" resultMap="MemberRoleResultMap">
+		SELECT
+		ur.member_id,
+		ur.role_id,
+		u.name,
+		r.role_name,
+		ur.reg_id,
+		ur.reg_dt,
+		ur.chg_id,
+		ur.chg_dt,
+		ur.del_id,
+		ur.del_dt,
+		ur.del_yn
+		FROM
+		user_role ur
+		INNER JOIN
+		member u
+		ON
+		ur.member_id = u.member_id
+		INNER JOIN
+		role r
+		ON
+		ur.role_id = r.role_id
+		<where>
+			<if test="filter.memberIds != null and filter.memberIds.size() > 0">
+				AND ur.member_id IN
+				<foreach collection="filter.memberIds" item="memberId" open="(" close=")" separator=",">
+					#{memberId}
+				</foreach>
+			</if>
+			<if test="filter.roleIds != null and filter.roleIds.size() > 0">
+				AND ur.role_id IN
+				<foreach collection="filter.roleIds" item="roleId" open="(" close=")" separator=",">
+					#{roleId}
+				</foreach>
+			</if>
+			<if test="filter.name != null and filter.name.trim() != ''">
+				AND u.name ILIKE '%' || #{filter.name} || '%'
+			</if>
+			<if test="filter.roleName != null and filter.roleName.trim() != ''">
+				AND r.role_name ILIKE '%' || #{filter.roleName} || '%'
+			</if>
+			<if test="filter.delYn != null and filter.delYn.trim() != ''">
+				AND ur.del_yn = #{filter.delYn}
+			</if>
+			<if test="filter.parentIsActive != null">
+				AND u.del_yn = #{filter.parentIsActive}
+				AND r.del_yn = #{filter.parentIsActive}
+			</if>
+		</where>
+	</select>
+	<select id="selectExistingUserRolesByCompositeKeys" resultMap="MemberRoleResultMap">
+		SELECT
+		ur.member_id,
+		ur.role_id,
+		ur.reg_id,
+		ur.reg_dt,
+		ur.chg_id,
+		ur.chg_dt,
+		ur.del_id,
+		ur.del_dt,
+		ur.del_yn
+		FROM
+		user_role ur
+		INNER JOIN
+		role r
+		ON ur.role_id = r.role_id
+		INNER JOIN
+		member u
+		ON ur.member_id = u.member_id
+		WHERE
+		(ur.member_id, ur.role_id) IN
+		<foreach collection="userRoles" item="userRole" open="(" close=")" separator=",">
+			(#{userRole.memberId}, #{userRole.roleId})
+		</foreach>
+	</select>
+
+</mapper>

@@ -1,0 +1,454 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.permission.mapper.PermissionMapper">
+    <resultMap id="PermissionResultMap" type="com.common.auth.permission.domain.Permission">
+        <id property="permissionId" column="permission_id" />
+        <result property="permissionName" column="permission_name"/>
+        <result property="description" column="description"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <resultMap id="PermissionResponseResultMap" type="com.common.auth.permission.dto.PermissionResponse">
+        <id property="permissionId" column="permission_id" />
+        <result property="permissionName" column="permission_name"/>
+        <result property="description" column="description"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+    
+    <select id="selectPermissionByPermissionId" resultMap="PermissionResultMap">
+        SELECT 
+            permission_id, permission_name, description, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM 
+            permission
+        WHERE 
+            permission_id = #{permissionId}
+    </select>
+    
+    <select id="selectPermissionByPermissionName" resultMap="PermissionResultMap">
+        SELECT 
+            permission_id, permission_name, description, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM 
+            permission
+        WHERE 
+            permission_name = #{permissionName}
+    </select>
+    
+    <select id="selectAllPermissions" resultMap="PermissionResultMap">
+        SELECT 
+            permission_id, permission_name, description, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM 
+            permission
+        ORDER BY 
+            permission_name
+    </select>
+
+    <select id="selectPermissionsWithFilter" resultMap="PermissionResponseResultMap">
+        SELECT 
+            permission_id, permission_name, description, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+        FROM 
+            permission
+        <where>
+            <if test="filter.permissionIds != null and filter.permissionIds.size() > 0">
+                AND permission_id IN
+                <foreach collection="filter.permissionIds" item="permissionId" open="(" close=")" separator=",">
+                    #{permissionId}
+                </foreach>
+            </if>
+            <if test="filter.permissionName != null and filter.permissionName.trim() != ''">
+                AND permission_name ILIKE '%' || #{filter.permissionName} || '%'
+            </if>
+            <if test="filter.description != null and filter.description.trim() != ''">
+                AND description ILIKE '%' || #{filter.description} || '%'
+            </if>
+            <if test="filter.delYn != null">
+                AND del_yn = #{filter.delYn}
+            </if>
+        </where>
+        order by permission_name
+    </select>
+    
+    <select id="selectPermissionsByRoleId" resultMap="PermissionResultMap">
+        SELECT 
+            p.permission_id , 
+            p.permission_name, 
+            p.description, 
+            p.reg_id,
+            p.reg_dt,
+            p.chg_id, 
+            p.chg_dt, 
+            p.del_id, 
+            p.del_dt, 
+            p.del_yn
+        FROM 
+            permission p
+        INNER JOIN 
+            role_permission rp
+            ON 
+                p.permission_id = rp.permission_id
+        WHERE 
+            rp.role_id = #{roleId}
+        ORDER BY 
+            p.permission_name
+    </select>
+    
+    <select id="selectPermissionsByMemberId" resultMap="PermissionResultMap">
+        SELECT DISTINCT 
+            p.permission_id , 
+            p.permission_name, 
+            p.description, 
+            p.reg_id,
+            p.reg_dt,
+            p.chg_id, 
+            p.chg_dt, 
+            p.del_id, 
+            p.del_dt, 
+            p.del_yn
+        FROM 
+            permission p
+        INNER JOIN 
+            role_permission rp
+            ON 
+                p.permission_id = rp.permission_id
+        INNER JOIN 
+            user_role ur
+            ON 
+                rp.role_id = ur.role_id
+        WHERE 
+            ur.member_id = #{memberId}
+        ORDER BY 
+            p.permission_name
+    </select>
+    
+    <insert id="insertPermission" parameterType="com.common.auth.permission.domain.Permission">
+        INSERT INTO 
+            permission (
+                permission_id, 
+                permission_name, 
+                description, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_id, 
+                del_dt, 
+                del_yn
+            )
+        VALUES (
+            COALESCE(#{permissionId}, gen_random_uuid()),
+            #{permissionName},
+            #{description},
+            #{regId},
+            COALESCE(#{regDt}, NOW()),
+            #{chgId},
+            COALESCE(#{chgDt}, NOW()),
+            #{delYn}
+        )
+    </insert>
+    
+    <update id="updatePermission" parameterType="com.common.auth.permission.domain.Permission">
+        UPDATE 
+            permission
+        SET
+            permission_name = #{permissionName},
+            description = #{description},
+            chg_id = #{chgId},
+            chg_dt = NOW(),
+            del_id = #{delId},
+            del_dt = #{delDt},
+            del_yn = #{delYn}
+        WHERE 
+            permission_id = #{permissionId}
+    </update>
+    
+    <delete id="deletePermissionByPermissionId">
+        DELETE FROM 
+            permission
+        WHERE 
+            permission_id = #{permissionId}
+    </delete>
+    
+    <select id="selectExistsByPermissionName" resultType="boolean">
+        SELECT 
+            EXISTS(
+                SELECT 
+                    1 
+                FROM 
+                    permission
+                WHERE 
+                    permission_name = #{permissionName}
+            )
+    </select>
+    
+    <select id="selectCountPermissions" resultType="int">
+        SELECT 
+            COUNT(*) 
+        FROM 
+            permission
+    </select>
+    
+    <!-- Bulk operations - 중복 체크용 메서드들 -->
+    <select id="selectExistPermissionIdListByPermissionIds" resultType="int">
+        SELECT 
+            permission_id
+        FROM 
+            permission
+        WHERE 
+            permission_id IN
+            <foreach collection="permissionIds" item="permissionId" open="(" close=")" separator=",">
+                #{permissionId}
+            </foreach>
+    </select>
+    
+    <select id="selectExistPermissionNameListByPermissionNames" resultType="string">
+        SELECT 
+            permission_name
+        FROM 
+            permission
+        WHERE 
+            permission_name IN
+            <foreach collection="permissionNames" item="permissionName" open="(" close=")" separator=",">
+                #{permissionName}
+            </foreach>
+    </select>
+    
+    <select id="selectPermissionListByPermissionNamesAndNotInPermissionIds" resultMap="PermissionResultMap">
+        SELECT 
+            permission_id, permission_name, description, reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM 
+            permission
+        <where>
+            <if test="items != null and items.size() > 0">
+                AND (
+                <foreach collection="items" item="item" separator=" OR ">
+                    (permission_name = #{item.permissionName} AND permission_id != #{item.permissionId})
+                </foreach>
+                )
+            </if>
+        </where>
+    </select>
+    
+    <!-- Bulk operations - CRUD 메서드들 -->
+    <insert id="insertPermissionsBulk" parameterType="list">
+        INSERT INTO 
+            permission (
+                permission_id, 
+                permission_name, 
+                description, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES
+        <foreach collection="permissions" item="permission" separator=",">
+            (
+                #{permission.permissionId},
+                #{permission.permissionName},
+                #{permission.description},
+                #{permission.regId},
+                #{permission.regDt},
+                #{permission.chgId},
+                #{permission.chgDt},
+                #{permission.delYn}
+            )
+        </foreach>
+    </insert>
+    
+    <update id="updatePermissionsBulk" parameterType="list">
+        UPDATE 
+            permission
+        SET 
+            permission_name = CASE 
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.permissionName != null and permission.permissionName.trim() != ''">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.permissionName}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN permission_name
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE permission_name
+            END,
+            description = CASE 
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.description != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.description}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN description
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE description
+            END,
+            chg_id = CASE 
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.chgId != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.chgDt != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = 
+                <foreach collection="permissions" item="permission" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="permission.delYn != null and permission.delYn == true">
+                            WHEN permission_id = #{permission.permissionId} THEN NULL::uuid
+                        </when>
+                        <when test="permission.delId != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.delId}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_dt = 
+                <foreach collection="permissions" item="permission" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="permission.delYn != null and permission.delYn == true">
+                            WHEN permission_id = #{permission.permissionId} THEN NULL::timestamp
+                        </when>
+                        <when test="permission.delDt != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_yn = CASE
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.delYn != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END
+        WHERE 
+            permission_id IN
+            <foreach collection="permissions" item="permission" open="(" close=")" separator=",">
+                #{permission.permissionId}
+            </foreach>
+    </update>
+    
+    <delete id="deletePermissionsBulk" parameterType="list">
+        DELETE FROM 
+            permission
+        WHERE 
+            permission_id IN
+            <foreach collection="permissions" item="permission" open="(" close=")" separator=",">
+                #{permission.permissionId}
+            </foreach>
+    </delete>
+    
+    <update id="softDeletePermissionsBulk" parameterType="list">
+        UPDATE 
+            permission
+        SET 
+            del_yn = CASE
+                <foreach collection="permissions" item="permission" separator=" ">
+                    WHEN permission_id = #{permission.permissionId} THEN #{permission.delYn}
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE 
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.chgId != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.chgDt != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = CASE 
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.delId != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.delId}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_id
+            END,
+            del_dt = CASE 
+                <foreach collection="permissions" item="permission" separator=" ">
+                    <choose>
+                        <when test="permission.delDt != null">
+                            WHEN permission_id = #{permission.permissionId} THEN #{permission.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN permission_id = #{permission.permissionId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_dt
+            END
+        WHERE 
+            permission_id IN
+            <foreach collection="permissions" item="permission" open="(" close=")" separator=",">
+                #{permission.permissionId}
+            </foreach>
+    </update>
+</mapper>

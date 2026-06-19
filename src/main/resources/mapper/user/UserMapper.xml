@@ -1,0 +1,563 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.user.mapper.UserMapper">
+    <resultMap id="UserResultMap" type="com.common.auth.user.domain.User">
+        <id property="memberId" column="user_id" />
+        <result property="userName" column="user_name"/>
+        <result property="email" column="email"/>
+        <result property="passwordHash" column="password_hash"/>
+        <result property="telNo" column="telNo"/>
+        <result property="userStatusCd" column="user_status_cd"/>
+        <result property="lastLoginDt" column="last_login_dt"/>
+        <result property="loginFailCnt" column="login_fail_cnt"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_Yn"/>
+    </resultMap>
+    
+    <sql id="userColumns">
+        user_id, user_name, email, password_hash, telNo, user_status_cd,
+        last_login_dt, login_fail_cnt, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+    </sql>
+    
+    <select id="selectUserByLoginId" resultMap="UserResultMap">
+        SELECT 
+            <include refid="userColumns" />
+        FROM 
+            user
+        WHERE 
+            member_id = #{memberId}
+        AND 
+            del_yn = 'N'
+    </select>
+    
+    <select id="selectUserByMemberId" resultMap="UserResultMap">
+        SELECT 
+            <include refid="userColumns" />
+        FROM 
+            user
+        WHERE 
+            member_id = #{memberId}
+        AND 
+            del_yn = 'N'
+    </select>
+    
+    <select id="selectAllUsers" resultMap="UserResultMap">
+        SELECT 
+            <include refid="userColumns" />
+        FROM 
+            user
+        ORDER BY 
+            email
+    </select>
+    
+    <insert id="insertUser" parameterType="com.jeil.delivery.domain.MemberDTO">
+        INSERT INTO 
+            user (
+                user_id, 
+                user_name, 
+                email, 
+                password_hash, 
+                telNo,
+                user_status_cd, 
+                last_login_dt, 
+                login_fail_cnt, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+        )
+        VALUES (
+            COALESCE(#{userId}, gen_random_uuid()),
+            #{userName},
+            #{email},
+            #{passwordHash},
+            #{telNo},
+            #{userStatusCd},
+            #{lastLoginDt},
+            #{loginFailCnt},
+            COALESCE(#{regId}, gen_random_uuid()),
+            COALESCE(#{regDt}, NOW()),
+            COALESCE(#{chgId}, gen_random_uuid()),
+            COALESCE(#{chgDt}, NOW()),
+            #{delYn}
+        )
+    </insert>
+    
+    <update id="updateUser" parameterType="com.jeil.delivery.domain.MemberDTO">
+        UPDATE 
+            user
+        SET
+            user_name = #{userName},
+            <!-- email은 업데이트 불가 -->
+            <!-- email = #{email}, -->
+            password_hash = #{passwordHash},
+            telNo = #{telNo},
+            user_status_cd = #{userStatusCd},
+            last_login_dt = #{lastLoginDt},
+            login_fail_cnt = #{loginFailCnt},
+            chg_id = #{chgId},
+            chg_dt = NOW(),
+            del_id = #{delId},
+            del_dt = #{delDt},
+            del_yn = #{delYn}
+        WHERE 
+            member_id = #{memberId}
+    </update>
+    
+    <delete id="deleteUserByUserId">
+        DELETE FROM 
+            user
+        WHERE 
+            member_id = #{memberId}
+    </delete>
+    
+    <select id="selectExistsByUserEmail" resultType="boolean">
+        SELECT 
+            EXISTS(
+                SELECT 
+                    1 
+                FROM 
+                    user
+                WHERE 
+                    email = #{email}
+            )
+    </select>
+    
+    <select id="selectCountUsers" resultType="int">
+        SELECT 
+            COUNT(*) 
+        FROM 
+            user
+    </select>
+    
+<!--    <select id="selectUsersWithFilter" resultMap="UserResultMap">-->
+<!--        SELECT -->
+<!--            <include refid="userColumns" />-->
+<!--        FROM -->
+<!--            user-->
+<!--        <where>-->
+<!--            <if test="filter.userIds != null and filter.userIds.size() > 0">-->
+<!--                AND user_id IN-->
+<!--                <foreach collection="filter.userIds" item="userId" open="(" close=")" separator=",">-->
+<!--                    #{userId}-->
+<!--                </foreach>-->
+<!--            </if>-->
+<!--            <if test="filter.userName != null and filter.userName.trim() != ''">-->
+<!--                AND user_name ILIKE '%' || #{filter.userName} || '%'-->
+<!--            </if>-->
+<!--            <if test="filter.email != null and filter.email.trim() != ''">-->
+<!--                AND email ILIKE '%' || #{filter.email} || '%'-->
+<!--            </if>-->
+<!--            <if test="filter.telNo != null and filter.telNo.trim() != ''">-->
+<!--                AND telNo ILIKE '%' || #{filter.telNo} || '%'-->
+<!--            </if>-->
+<!--            <if test="filter.userStatusCd != null and filter.userStatusCd.trim() != ''">-->
+<!--                AND user_status_cd = #{filter.userStatusCd}-->
+<!--            </if>-->
+<!--            <if test="filter.delYn != null">-->
+<!--                AND del_yn = #{filter.delYn}-->
+<!--            </if>-->
+<!--        </where>-->
+<!--    </select>-->
+    
+    <insert id="insertUsersBatch" parameterType="list">
+        INSERT INTO 
+            user (
+                <include refid="userColumns" />
+        )
+        VALUES
+        <foreach collection="users" item="user" separator=",">
+            (
+                COALESCE(#{user.userId}, gen_random_uuid()),
+                #{user.userName},
+                #{user.email},
+                #{user.passwordHash},
+                #{user.telNo},
+                #{user.userStatusCd},
+                #{user.lastLoginDt},
+                COALESCE(#{user.loginFailCnt}, 0),
+                #{user.regId},
+                COALESCE(#{user.regDt}, NOW()),
+                #{user.chgId},
+                COALESCE(#{user.chgDt}, NOW()),
+                #{user.delId},
+                #{user.delDt},
+                #{user.delYn}
+            )
+        </foreach>
+    </insert>
+    
+    <update id="updateUsersBatch" parameterType="list">
+        <foreach collection="users" item="user" separator=";">
+            UPDATE 
+                user
+            SET 
+                user_name = #{user.userName},
+                email = #{user.email},
+                password_hash = #{user.passwordHash},
+                telNo = #{user.telNo},
+                user_status_cd = #{user.userStatusCd},
+                last_login_dt = #{user.lastLoginDt},
+                login_fail_cnt = #{user.loginFailCnt},
+                chg_id = #{user.chgId},
+                chg_dt = COALESCE(#{user.chgDt}, NOW()),
+                del_id = #{user.delId},
+                del_dt = #{user.delDt},
+                del_yn = #{user.delYn}
+            WHERE 
+                user_id = #{user.userId}
+        </foreach>
+    </update>
+    
+    <!-- Bulk operations - 중복 체크용 메서드들 -->
+    <select id="selectExistUserIdListByMemberIds" resultType="int">
+        SELECT 
+            user_id
+        FROM 
+            user
+        WHERE 
+            user_id IN
+        <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+            #{userId}
+        </foreach>
+    </select>
+    
+    <select id="selectExistEmailListByEmails" resultType="string">
+        SELECT 
+            email
+        FROM 
+            user
+        WHERE 
+            email IN
+        <foreach collection="emails" item="email" open="(" close=")" separator=",">
+            #{email}
+        </foreach>
+    </select>
+    
+    <select id="selectUserListByEmailsAndNotInUserIds" resultMap="UserResultMap">
+        SELECT 
+            <include refid="userColumns" />
+        FROM 
+            user
+        <where>
+        <if test="items != null and items.size() > 0">
+            AND (
+            <foreach collection="items" item="item" separator=" OR ">
+                (
+                        email = #{item.email} 
+                        AND user_id != #{item.userId}
+                )
+            </foreach>
+            )
+        </if>
+        </where>
+    </select>
+    
+    <!-- Bulk operations - CRUD 메서드들 -->
+    <insert id="insertUsersBulk" parameterType="list">
+        INSERT INTO 
+            user (
+                user_id,
+                user_name,
+                email,
+                password_hash,
+                telNo,
+                user_status_cd,
+                last_login_dt,
+                login_fail_cnt,
+                reg_id,
+                reg_dt,
+                chg_id,
+                chg_dt,
+                del_yn
+            )
+        VALUES
+        <foreach collection="users" item="user" separator=",">
+            (
+                #{user.userId},
+                #{user.userName},
+                #{user.email},
+                #{user.passwordHash},
+                #{user.telNo},
+                #{user.userStatusCd},
+                #{user.lastLoginDt},
+                COALESCE(#{user.loginFailCnt}, 0),
+                #{user.regId},
+                #{user.regDt},
+                #{user.chgId},
+                #{user.chgDt},
+                #{user.delYn}
+            )
+        </foreach>
+    </insert>
+    
+    <update id="updateUsersBulk" parameterType="list">
+        UPDATE 
+            user
+        SET 
+            user_name = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.userName != null and user.userName.trim() != ''">
+                            WHEN user_id = #{user.userId} THEN #{user.userName}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN user_name
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE user_name
+            END,
+            <!-- email은 update 불가 -->
+            <!-- email = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.email != null and user.email.trim() != ''">
+                            WHEN user_id = #{user.userId} THEN #{user.email}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN email
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE email
+            END, -->
+            password_hash = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.passwordHash != null and user.passwordHash.trim() != ''">
+                            WHEN user_id = #{user.userId} THEN #{user.passwordHash}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN password_hash
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE password_hash
+            END,
+            telNo = CASE
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.telNo != null and user.telNo.trim() != ''">
+                            WHEN user_id = #{user.userId} THEN #{user.telNo}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN telNo
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE telNo
+            END,
+            user_status_cd = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.userStatusCd != null and user.userStatusCd.trim() != ''">
+                            WHEN user_id = #{user.userId} THEN #{user.userStatusCd}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN user_status_cd
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE user_status_cd
+            END,
+            last_login_dt = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.lastLoginDt != null">
+                            WHEN user_id = #{user.userId} THEN #{user.lastLoginDt}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN last_login_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE last_login_dt
+            END,
+            login_fail_cnt = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.loginFailCnt != null">
+                            WHEN user_id = #{user.userId} THEN #{user.loginFailCnt}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN login_fail_cnt
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE login_fail_cnt
+            END,
+            chg_id = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.chgId != null">
+                            WHEN user_id = #{user.userId} THEN #{user.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.chgDt != null">
+                            WHEN user_id = #{user.userId} THEN #{user.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = 
+                <foreach collection="users" item="user" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="user.delYn != null and user.delYn == true">
+                            WHEN user_id = #{user.userId} THEN NULL::uuid
+                        </when>
+                        <when test="user.delId != null">
+                            WHEN user_id = #{user.userId} THEN #{user.delId}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_dt = 
+                <foreach collection="users" item="user" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="user.delYn != null and user.delYn == true">
+                            WHEN user_id = #{user.userId} THEN NULL::timestamp
+                        </when>
+                        <when test="user.delDt != null">
+                            WHEN user_id = #{user.userId} THEN #{user.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_yn = CASE
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.delYn != null">
+                            WHEN user_id = #{user.userId} THEN #{user.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END
+        WHERE 
+            user_id IN
+            <foreach collection="users" item="user" open="(" close=")" separator=",">
+                #{user.userId}
+            </foreach>
+    </update>
+    
+    <delete id="deleteUsersBulk" parameterType="list">
+        DELETE FROM 
+            user
+        WHERE 
+            user_id IN
+                <foreach collection="users" item="user" open="(" close=")" separator=",">
+                    #{user.userId}
+                </foreach>
+    </delete>
+    
+    <update id="softDeleteUsersBulk" parameterType="list">
+        UPDATE 
+            user
+        SET 
+            del_yn = CASE
+                <foreach collection="users" item="user" separator=" ">
+                    WHEN user_id = #{user.userId} THEN #{user.delYn}
+                </foreach>
+                ELSE del_yn
+            END,
+            user_status_cd = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.userStatusCd != null">
+                            WHEN user_id = #{user.userId} THEN #{user.userStatusCd}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN user_status_cd
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE user_status_cd
+            END,
+            chg_id = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.chgId != null">
+                            WHEN user_id = #{user.userId} THEN #{user.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.chgDt != null">
+                            WHEN user_id = #{user.userId} THEN #{user.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.delId != null">
+                            WHEN user_id = #{user.userId} THEN #{user.delId}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_id
+            END,
+            del_dt = CASE 
+                <foreach collection="users" item="user" separator=" ">
+                    <choose>
+                        <when test="user.delDt != null">
+                            WHEN user_id = #{user.userId} THEN #{user.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN user_id = #{user.userId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_dt
+            END
+        WHERE 
+            user_id IN
+            <foreach collection="users" item="user" open="(" close=")" separator=",">
+                #{user.userId}
+            </foreach>
+    </update>
+</mapper>

@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.billing.mapper.BillCompanyMapper">
+
+	<!-- SELECT -->
+    <select id="selectBillCompanyList" resultType="com.jeil.delivery.billing.domain.BillCompanyVO">
+        SELECT
+        bill_company_id,
+        company_nm,
+        representative_nm,
+        biz_no,
+        address,
+        post_no,
+        biz_type,
+        biz_item,
+        tel_no,
+        fax_no,
+        email,
+        bank_nm,
+        depositor_nm,
+        account_no,
+        rmk,
+        reg_id,
+        reg_dt,
+        chg_id,
+        chg_dt,
+        del_yn
+        FROM bill_company
+        WHERE del_yn = 'N'
+        <if test="billCompanyId != null">
+            AND bill_company_id = #{billCompanyId}
+        </if>
+        <if test="companyNm != null and companyNm != ''">
+            AND company_nm LIKE CONCAT('%', #{companyNm}, '%')
+        </if>
+        <if test="bizNo != null and bizNo != ''">
+            AND biz_no = #{bizNo}
+        </if>
+        order by bill_company_id desc
+    </select>
+
+    <select id="selectBillCompanyInfo" resultType="com.jeil.delivery.billing.domain.BillCompanyDTO">
+    	/* selectBillCompanyInfo */
+        SELECT
+	        bill_company_id, company_nm AS bill_company_nm, representative_nm AS bill_representative_nm
+	        , biz_no AS bill_biz_no , address AS bill_address
+	        , biz_type AS bill_biz_type, biz_item AS bill_biz_item, tel_no AS billTelNo, fax_no AS billFaxNo
+	        , CONCAT(bank_nm, ' ' ,depositor_nm, ' ', account_no) AS bill_account_info
+	        , reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM bill_company
+        WHERE del_yn = 'N'
+            AND bill_company_id = #{billCompanyId}
+        order by bill_company_id desc
+    </select>
+
+	<!-- Code SELECT -->
+    <select id="selectBillCompanyCodeList" resultType="com.jeil.delivery.system.domain.CodeVO">
+    	/* selectBillCompanyCodeList */
+        SELECT
+        bill_company_id as codeVal,
+        company_nm as codeNm,
+        reg_id,
+        reg_dt,
+        chg_id,
+        chg_dt,
+        del_yn
+        FROM bill_company
+        WHERE del_yn = 'N'
+        order by bill_company_id desc
+    </select>
+
+	<!-- Code Detail SELECT -->
+    <select id="selectBillCompanyCodeDetailList" resultType="com.jeil.delivery.system.domain.CodeVO">
+    	/* "selectBillCompanyCodeDetailList" */
+        SELECT
+        bill_company_id as codeVal,
+        company_nm as codeNm,
+        reg_id,
+        reg_dt,
+        chg_id,
+        chg_dt,
+        del_yn
+        FROM bill_company
+        WHERE del_yn = 'N'
+        order by bill_company_id desc
+    </select>
+
+    <!-- INSERT -->
+    <insert id="insertBillCompany" parameterType="com.jeil.delivery.billing.domain.BillCompanyVO">
+        INSERT INTO bill_company (
+        COMPANY_NM, REPRESENTATIVE_NM,
+        BIZ_NO, ADDRESS, POST_NO, BIZ_TYPE, BIZ_ITEM,
+        TEL_NO, FAX_NO, EMAIL,
+        BANK_NM, DEPOSITOR_NM, ACCOUNT_NO, RMK,
+        REG_ID, REG_DT, CHG_ID, CHG_DT, DEL_YN
+        ) VALUES (
+        #{companyNm}, #{representativeNm},
+        #{bizNo}, #{address}, #{postNo}, #{bizType}, #{bizItem},
+        #{telNo}, #{faxNo}, #{email},
+        #{bankNm}, #{depositorNm}, #{accountNo}, #{rmk},
+        #{regId}, NOW(), #{chgId}, NOW(), 'N'
+        )
+    </insert>
+
+    <!-- UPDATE -->
+    <update id="updateBillCompany" parameterType="com.jeil.delivery.billing.domain.BillCompanyVO">
+        UPDATE bill_company
+        SET
+        COMPANY_NM = #{companyNm},
+        REPRESENTATIVE_NM = #{representativeNm},
+        BIZ_NO = #{bizNo},
+        ADDRESS = #{address},
+        POST_NO = #{postNo},
+        BIZ_TYPE = #{bizType},
+        BIZ_ITEM = #{bizItem},
+        TEL_NO = #{telNo},
+        FAX_NO = #{faxNo},
+        EMAIL = #{email},
+        BANK_NM = #{bankNm},
+        DEPOSITOR_NM = #{depositorNm},
+        ACCOUNT_NO = #{accountNo},
+        RMK = #{rmk},
+        CHG_ID = #{chgId},
+        CHG_DT = NOW()
+        WHERE BILL_COMPANY_ID = #{billCompanyId}
+    </update>
+
+    <!-- DELETE (Soft Delete) -->
+    <update id="deleteBillCompany" parameterType="com.jeil.delivery.billing.domain.BillCompanyVO">
+        UPDATE bill_company
+        SET del_yn = 'Y',
+            chg_id = #{chgId},
+            chg_dt = now()
+        WHERE bill_company_id = #{billCompanyId}
+    </update>
+</mapper>

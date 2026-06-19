@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.auth.mapper.RefreshTokenMapper">
+    <resultMap id="RefreshTokenResultMap" type="com.common.auth.auth.domain.RefreshToken">
+        <id property="refreshToken" column="refresh_tokens"/>
+        <result property="memberId" column="member_id" />
+        <result property="expireDt" column="expire_dt"/>
+        <result property="delYn" column="del_yn"/>
+        <result property="ipAddress" column="ip_address" typeHandler="com.common.auth.common.config.InetAddressTypeHandler"/>
+        <result property="userAgent" column="user_agent"/>
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+    </resultMap>
+
+    <select id="findRefreshTokenByTokenHash" resultMap="RefreshTokenResultMap">
+        SELECT
+            member_id, refresh_token, del_yn, ip_address, user_agent, reg_dt, chg_dt, expire_dt, del_id
+        FROM
+            refresh_tokens
+        WHERE
+            refresh_token = #{refreshToken}
+    </select>
+
+    <select id="findRefreshTokensByUserId" resultMap="RefreshTokenResultMap">
+        SELECT
+            member_id, refresh_token, del_yn, ip_address, user_agent, reg_dt, chg_dt, expire_dt, del_id
+        FROM
+            refresh_tokens
+        WHERE
+            member_id = #{memberId}
+        ORDER BY
+            reg_dt DESC
+    </select>
+
+    <select id="findValidRefreshTokensByUserId" resultMap="RefreshTokenResultMap">
+        SELECT
+            member_id, refresh_token, del_yn, ip_address, user_agent, reg_dt, chg_dt, expire_dt, del_id
+        FROM
+            refresh_tokens
+        WHERE
+            member_id = #{memberId}
+          AND
+            del_yn = 'N'
+          AND
+            expire_dt > NOW()
+        ORDER BY
+            reg_dt DESC
+    </select>
+
+    <insert id="insertRefreshToken" parameterType="com.common.auth.auth.domain.RefreshToken">
+        INSERT INTO
+            refresh_tokens (
+                member_id, refresh_token, del_yn, ip_address, user_agent, reg_dt, chg_dt, expire_dt, del_id ,reg_id, chg_id
+        )
+        VALUES (
+           #{memberId,jdbcType=INTEGER},
+           #{refreshToken,jdbcType=VARCHAR},
+           #{delYn},
+           #{ipAddress, typeHandler=com.common.auth.common.config.InetAddressTypeHandler},
+           #{userAgent,jdbcType=VARCHAR},
+           COALESCE(#{regDt,jdbcType=TIMESTAMP}, NOW()),
+           COALESCE(#{chgDt,jdbcType=TIMESTAMP}, NOW()),
+           #{expireDt,jdbcType=TIMESTAMP},
+           #{delId,jdbcType=INTEGER},
+           #{memberId,jdbcType=INTEGER},
+           #{memberId,jdbcType=INTEGER}
+        )
+    </insert>
+
+    <update id="revokeToken">
+        UPDATE
+            refresh_tokens
+        SET
+            del_yn = 'Y',
+            expire_dt = #{expireDt},
+            del_id = #{delId}
+        WHERE
+            refresh_token = #{refreshToken}
+    </update>
+
+    <update id="revokeAllUserTokens">
+        UPDATE
+            refresh_tokens
+        SET
+            del_yn = 'Y',
+            expire_dt = #{expireDt},
+            del_id = #{delId}
+        WHERE
+            member_id = #{memberId}
+          AND
+            del_yn = 'N'
+    </update>
+
+    <delete id="deleteRefreshTokenByTokenHash">
+        DELETE FROM
+            refresh_tokens
+        WHERE
+            refresh_token = #{refreshToken}
+    </delete>
+
+    <delete id="deleteExpiredTokens">
+        DELETE FROM
+            refresh_tokens
+        WHERE
+            expire_dt &lt; NOW()
+    </delete>
+
+    <delete id="deleteRefreshTokensByUserId">
+        DELETE FROM
+            refresh_tokens
+        WHERE
+            member_id = #{memberId}
+    </delete>
+
+    <select id="existsRefreshTokenByTokenHash" resultType="boolean">
+        SELECT
+            EXISTS(
+                SELECT
+                    1
+                FROM
+                    refresh_tokens
+                WHERE
+                    refresh_token = #{refreshToken}
+            )
+    </select>
+
+    <select id="countValidTokensByUserId" resultType="int">
+        SELECT
+            COUNT(*)
+        FROM
+            refresh_tokens
+        WHERE
+            member_id = #{memberId}
+          AND
+            del_yn = 'N'
+          AND
+            expire_dt > NOW()
+    </select>
+
+    <select id="countExpiredTokens" resultType="int">
+        SELECT
+            COUNT(*)
+        FROM
+            refresh_tokens
+        WHERE
+            expire_dt &lt; NOW()
+    </select>
+
+    <select id="findExpiredTokens" resultMap="RefreshTokenResultMap">
+        SELECT
+            user_id, refresh_token, del_yn, ip_address, user_agent, reg_dt, expire_dt, expire_dt, del_id
+        FROM
+            refresh_tokens
+        WHERE
+            expire_dt &lt; NOW()
+        ORDER BY
+            expire_dt ASC
+    </select>
+
+    <update id="revokeExpiredTokens">
+        UPDATE
+            refresh_tokens
+        SET
+            del_yn = 'Y',
+            expire_dt = #{expireDt},
+            del_id = #{delId}
+        WHERE
+            expire_dt &lt; NOW()
+          AND del_yn = 'N'
+    </update>
+
+    <delete id="deleteOldRevokedTokens">
+        DELETE FROM
+            refresh_tokens
+        WHERE
+            del_yn = 'Y'
+          AND expire_dt &lt; #{cutoffDate}
+    </delete>
+
+    <select id="countAllTokens" resultType="int">
+        SELECT
+            COUNT(*)
+        FROM
+            refresh_tokens
+    </select>
+
+    <select id="countValidTokens" resultType="int">
+        SELECT
+            COUNT(*)
+        FROM
+            refresh_tokens
+        WHERE
+            del_yn = 'N'
+          AND
+            expire_dt > NOW()
+    </select>
+
+    <select id="countRevokedTokens" resultType="int">
+        SELECT
+            COUNT(*)
+        FROM
+            refresh_tokens
+        WHERE
+            del_yn = 'Y'
+    </select>
+</mapper>

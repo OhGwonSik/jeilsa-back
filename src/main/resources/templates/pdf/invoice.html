@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>청구서</title>
+    <style>
+        body {
+            font-family: 'NanumGothic', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .invoice-wrapper {
+            margin: 0px auto;
+            width: 620px;
+            font-size: 11px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-top: 5px;
+            table-layout: fixed;
+        }
+        th, td {
+            border: 1px solid #000;
+            padding: 4px;
+            text-align: center;
+            vertical-align: middle;
+            word-break: break-all;
+        }
+        .section-header {
+            background-color: #EFEFEF;
+            font-weight: bold;
+        }
+        .text-right {
+            text-align: right;
+            padding-right: 5px;
+        }
+        .big-total {
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+<div class="invoice-wrapper" th:with="invoice=${companyInvoiceInfo}">
+
+    <table style="border: none; margin-bottom: 10px;">
+        <tr style="border: none;">
+            <td style="border: none; border-bottom: 2px solid #000; padding: 10px; font-size: 12px; text-align: center;">
+                <span style="font-weight: bold; font-size: 14px;" th:text="${invoice.billCompanyInfo.billCompanyNm}">(주)제일사</span><br/>
+                우 : <span th:text="${invoice.billCompanyInfo.billAddress}">주소</span>
+                T. <span th:text="${invoice.billCompanyInfo.billTelNo}">000</span>
+                F. <span th:text="${invoice.billCompanyInfo.billFaxNo}">000</span>
+            </td>
+        </tr>
+    </table>
+
+    <div style="text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 5px; border: 1px solid #000; padding: 5px;">
+        <span th:text="|${invoice.month}월 택배 청구 내역서|">월 택배 청구 내역서</span>
+    </div>
+
+    <table>
+        <colgroup>
+            <col style="width: 30px;" />
+            <col style="width: 80px;" />
+            <col style="width: 150px;" />
+            <col style="width: 30px;" />
+            <col style="width: 80px;" />
+            <col style="width: 80px;" />
+            <col style="width: 80px;" />
+            <col style="width: 80px;" />
+        </colgroup>
+        <tbody>
+            <tr>
+                <td rowspan="4" class="section-header">공<br/>급<br/>받<br/>는<br/>자</td>
+                <th>상 호 명</th>
+                <td th:text="${invoice.companyInfo.companyNm}">거래처</td>
+
+                <td rowspan="4" class="section-header">공<br/>급<br/>자</td>
+                <th>사업자번호</th>
+                <td colspan="3" class="text-left" th:text="${invoice.billCompanyInfo.billBizNo}">번호</td>
+            </tr>
+
+            <tr>
+                <th rowspan="3">기  간</th>
+                <td rowspan="3" th:text="|${invoice.companyInfo.startDate} ~ ${invoice.companyInfo.endDate}|">기간</td>
+
+                <th>상 호</th>
+                <td th:text="${invoice.billCompanyInfo.billCompanyNm}">상호</td>
+                <th>대표자</th>
+                <td th:text="${invoice.billCompanyInfo.billRepresentativeNm}">대표</td>
+            </tr>
+
+            <tr>
+                <th>사업장주소</th>
+                <td colspan="3" class="text-left" th:text="${invoice.billCompanyInfo.billAddress}">주소</td>
+            </tr>
+
+            <tr>
+                <th>업 태</th>
+                <td th:text="${invoice.billCompanyInfo.billBizType}">서비스</td>
+                <th>종 목</th>
+                <td th:text="${invoice.billCompanyInfo.billBizItem}">종목</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table>
+        <colgroup>
+            <col style="width: 120px;" />
+            <col style="width: 200px;" />
+            <col style="width: 90px;" />
+            <col style="width: 90px;" />
+            <col style="width: 60px;" />
+            <col style="width: 60px;" />
+        </colgroup>
+        <thead>
+            <tr>
+                <th colspan="6" style="padding: 5px; font-weight: bold; border-bottom: 2px solid #000;">
+                    <span th:text="|${invoice.month}월 청구 금액|">청구 금액</span>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td rowspan="3" style="font-weight: bold;">
+                    <span th:text="|${invoice.month}월 청구금액|">청구금액</span><br/>(VAT포함)
+                </td>
+                <td rowspan="3" class="big-total">
+                    <span th:text="'₩ ' + ${#numbers.formatInteger(invoice.allTotAmount ?: 0, 1, 'COMMA')}">₩ 0</span>
+                </td>
+                <td>기본운임료</td>
+                <td class="text-right" th:text="${#numbers.formatInteger(invoice.communicationFee ?: 0, 1, 'COMMA')}">0</td>
+                <td>부 가 세</td>
+                <td class="text-right" th:text="${#numbers.formatInteger(invoice.communicationFeeVat ?: 0, 1, 'COMMA')}">0</td>
+            </tr>
+            <tr>
+                <td>운 임 금 액</td>
+                <td class="text-right" th:text="${#numbers.formatInteger(invoice.totAmount ?: 0, 1, 'COMMA')}">0</td>
+                <td>부 가 세</td>
+                <td class="text-right" th:text="${#numbers.formatInteger(invoice.totAmountVat ?: 0, 1, 'COMMA')}">0</td>
+            </tr>
+            <tr>
+                <td>입 금 계 좌</td>
+                <td colspan="3" th:text="${invoice.billCompanyInfo.billAccountInfo}">계좌</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <th:block th:if="${(invoice.totalDeliveryPrepaid + invoice.totalDeliveryCollect) >= 0}">
+        <div style="font-weight: bold; text-align: center; margin-top: 10px; margin-bottom: 5px;">택배 이용내역</div>
+        <table>
+            <colgroup>
+                <col style="width: 30px;" />
+                <col style="width: 40px;" />
+                <col style="width: 80px;" />
+                <col style="width: 80px;" />
+                <col style="width: 120px;" />
+                <col style="width: 40px;" />
+                <col style="width: 40px;" />
+                <col style="width: 30px;" />
+                <col style="width: 40px;" />
+                <col style="width: 50px;" />
+                <col style="width: 60px;" />
+            </colgroup>
+            <thead>
+                <tr class="section-header">
+                    <th>NO</th>
+                    <th>날짜</th>
+                    <th>발신처</th>
+                    <th>수신처</th>
+                    <th>전화번호</th>
+                    <th>구분</th>
+                    <th>품명</th>
+                    <th>수량</th>
+                    <th>결재</th>
+                    <th>단가</th>
+                    <th>청구금액</th>
+                </tr>
+            </thead>
+			<tbody>
+                <tr th:each="item, stat : ${invoice.shipmentInfoList.?[kindGroup == '택배']}">
+
+                    <td th:text="${stat.count}">1</td>
+
+                    <td th:text="${(item.billDate != null && #strings.length(item.billDate) > 5) ? #strings.substring(item.billDate, 5) : item.billDate}">MM-dd</td>
+                    <td th:text="${item.senderCompanyNm}"></td>
+                    <td th:text="${item.receiverCompanyNm}"></td>
+                    <td th:text="${item.receiverTelNo}"></td>
+                    <td th:text="${item.kindGroup}"></td>
+                    <td th:text="${item.kindNm}"></td>
+                    <td th:text="${item.qty}"></td>
+                    <td th:text="${item.chargeNm}"></td>
+                    <td class="text-right" th:text="${#numbers.formatInteger(item.untpc ?: 0, 1, 'COMMA')}">0</td>
+                    <td class="text-right" th:text="${#numbers.formatInteger(item.amount ?: 0, 1, 'COMMA')}">0</td>
+                </tr>
+                <tr>
+                    <th colspan="10" class="text-right" style="padding-right: 10px; font-weight: bold;">(A) 택 배 금 액</th>
+                    <th class="text-right" style="font-weight: bold;"
+                        th:text="${#numbers.formatInteger(invoice.totalDeliveryPrepaid + invoice.totalDeliveryCollect, 1, 'COMMA')}">0</th>
+                </tr>
+            </tbody>
+        </table>
+    </th:block>
+
+    <th:block th:if="${(invoice.totalCommunicationPrepaid + invoice.totalCommunicationCollect) >= 0}">
+        <div style="font-weight: bold; text-align: center; margin-top: 10px; margin-bottom: 5px;">통신 이용내역</div>
+        <table>
+            <colgroup>
+                <col style="width: 30px;" />
+                <col style="width: 40px;" />
+                <col style="width: 100px;" />
+                <col style="width: 100px;" />
+                <col style="width: 40px;" />
+                <col style="width: 60px;" />
+                <col style="width: 40px;" />
+                <col style="width: 50px;" />
+                <col style="width: 60px;" />
+            </colgroup>
+            <thead>
+                <tr class="section-header">
+                    <th>NO</th>
+                    <th>날짜</th>
+                    <th>발신처</th>
+                    <th>수신처</th>
+                    <th>구분</th>
+                    <th>품명</th>
+                    <th>무게</th>
+                    <th>단가</th>
+                    <th>청구금액</th>
+                </tr>
+            </thead>
+			<tbody>
+                <tr th:each="item, stat : ${invoice.shipmentInfoList.?[kindGroup == '통신']}">
+
+                    <td th:text="${stat.count}">1</td>
+
+                    <td th:text="${(item.billDate != null && #strings.length(item.billDate) > 5) ? #strings.substring(item.billDate, 5) : item.billDate}">MM-dd</td>
+                    <td th:text="${item.senderCompanyNm}"></td>
+                    <td th:text="${item.receiverCompanyNm}"></td>
+                    <td th:text="${item.kindGroup}"></td>
+                    <td th:text="${item.kindNm}"></td>
+                    <td th:text="${item.qty}"></td>
+                    <td class="text-right" th:text="${#numbers.formatInteger(item.untpc ?: 0, 1, 'COMMA')}">0</td>
+                    <td class="text-right" th:text="${#numbers.formatInteger(item.amount ?: 0, 1, 'COMMA')}">0</td>
+                </tr>
+                <tr>
+                    <th colspan="8" class="text-right" style="padding-right: 10px; font-weight: bold;">(B) 통 신 금 액</th>
+                    <th class="text-right" style="font-weight: bold;"
+                        th:text="${#numbers.formatInteger(invoice.totalCommunicationPrepaid + invoice.totalCommunicationCollect, 1, 'COMMA')}">0</th>
+                </tr>
+            </tbody>
+        </table>
+    </th:block>
+
+    <table style="margin-top: 5px;">
+        <tbody>
+            <tr>
+                <th style="padding: 10px; font-weight: bold; width: 520px;">(A) + (B) (VAT별도)</th>
+                <th class="text-right" style="font-weight: bold;"
+                    th:with="totalSum=${invoice.totalDeliveryPrepaid + invoice.totalDeliveryCollect + invoice.totalCommunicationPrepaid + invoice.totalCommunicationCollect}"
+                    th:text="${#numbers.formatInteger(totalSum, 1, 'COMMA')}">0</th>
+            </tr>
+        </tbody>
+    </table>
+
+</div>
+</body>
+</html>

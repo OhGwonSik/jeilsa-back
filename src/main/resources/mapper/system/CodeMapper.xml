@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.system.mapper.CodeMapper">
+
+	<!-- SELECT -->
+	<select id="selectCodeList" resultType="com.jeil.delivery.system.domain.CodeVO">
+		/* selectCodeList */
+	    SELECT
+	        code_id, code_val, code_nm, parnts_code_val, type,
+	        reg_id, reg_dt, chg_id, chg_dt, del_yn
+	    FROM code
+	    WHERE del_yn = 'N'
+		<if test='type != null and type != ""'>
+			AND type = #{type}
+		</if>
+		<if test='parentsCodeVal != null and parentsCodeVal != ""'>
+			AND parnts_code_val = #{parentsCodeVal}
+		</if>
+		ORDER BY code_nm
+	</select>
+
+	<!-- INSERT -->
+	<insert id="insertCode" parameterType="com.jeil.delivery.system.domain.CodeVO">
+	    INSERT INTO code (
+	        code_id, code_val, code_nm, parnts_code_val, type,
+	        reg_id, reg_dt, chg_id, chg_dt, del_yn
+	    ) VALUES (
+	        #{codeId}, #{codeVal}, #{codeNm}, #{parntsCodeVal}, #{type},
+	        #{regId}, #{regDt}, #{chgId}, #{chgDt}, #{delYn}
+	    )
+	</insert>
+
+	<!-- UPDATE -->
+	<update id="updateCode" parameterType="com.jeil.delivery.system.domain.CodeVO">
+	    UPDATE code
+	    SET
+	        code_nm = #{codeNm},
+	        parnts_code_val = #{parntsCodeVal},
+	        type = #{type},
+	        chg_id = #{chgId},
+	        chg_dt = #{chgDt}
+	    WHERE code_id = #{codeId}
+	      AND code_val = #{codeVal}
+	</update>
+
+	<!-- DELETE (Soft Delete) -->
+	<update id="deleteCode" parameterType="com.jeil.delivery.system.domain.CodeVO">
+	    UPDATE code
+	    SET del_yn = 'Y',
+	        chg_dt = now()
+	    WHERE code_id = #{codeId}
+	      AND code_val = #{codeVal}
+	</update>
+</mapper>

@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.deliverylogic.mapper.DeliveryRouteMapper">
+
+	<!-- SELECT -->
+    <select id="selectDeliveryRouteList" resultType="com.jeil.delivery.deliverylogic.domain.DeliveryRouteVO">
+    	/* selectDeliveryRouteList */
+        SELECT
+            delivery_route_id, delivery_route_nm,
+            reg_id, reg_dt, chg_id, chg_dt, del_yn
+        FROM delivery_route
+        WHERE del_yn = 'N'
+        ORDER BY delivery_route_id DESC
+    </select>
+
+	<!-- Code SELECT -->
+    <select id="selectDeliveryRouteCodeList" resultType="com.jeil.delivery.system.domain.CodeVO">
+    	/* selectDeliveryRouteCodeList */
+        SELECT
+            MIN(delivery_route_id) as code_val, delivery_route_nm as code_nm
+        FROM delivery_route
+          WHERE del_yn = 'N'
+		  GROUP BY delivery_route_nm
+		  ORDER BY code_nm
+    </select>
+
+    <!-- INSERT -->
+    <insert id="insertDeliveryRoute" parameterType="com.jeil.delivery.deliverylogic.domain.DeliveryRouteDTO">
+    	/* insertDeliveryRoute */
+        INSERT INTO delivery_route (
+            delivery_route_nm,
+            reg_id,
+            reg_dt,
+            chg_id,
+            chg_dt,
+            del_yn
+        ) VALUES (
+            #{param.deliveryRouteNm},
+            #{memberInfo.memberId},
+            now(),
+            #{memberInfo.memberId},
+            now(),
+            'N'
+        )
+    </insert>
+
+    <!-- UPDATE -->
+    <update id="updateDeliveryRoute" parameterType="com.jeil.delivery.deliverylogic.domain.DeliveryRouteDTO">
+    	/* updateDeliveryRoute */
+        UPDATE delivery_route
+        SET
+            delivery_route_nm = #{param.deliveryRouteNm},
+            chg_id = #{memberInfo.memberId},
+            chg_dt = now()
+        WHERE delivery_route_id = #{param.deliveryRouteId}
+    </update>
+
+    <!-- SOFT DELETE -->
+    <update id="deleteDeliveryRoute" parameterType="com.jeil.delivery.deliverylogic.domain.DeliveryRouteDTO">
+        UPDATE delivery_route
+        SET
+            del_yn = 'Y',
+            chg_id = #{memberInfo.memberId},
+            chg_dt = now()
+        WHERE delivery_route_id = #{param.deliveryRouteId}
+    </update>
+
+	<!-- (회사 <-> 배송코스 매핑 조회) -->
+    <select id="selectDeliveryRouteByCompany" resultType="com.jeil.delivery.system.domain.CompanyDTO">
+	    /* selectDeliveryRouteByCompany */
+        SELECT
+            delivery_route_id,
+            company_id,
+            reg_id,
+            reg_dt,
+            chg_id,
+            chg_dt,
+            del_yn
+        FROM company_delivery_route
+        WHERE delivery_route_id = #{deliveryRouteId}
+			AND company_id = #{companyId}
+    </select>
+
+	<!-- 배송코스 내 회사 유무 확인 -->
+	<select id="checkCompanyDeliveryRouteInfo" resultType="boolean">
+		/* checkCompanyDeliveryRouteInfo */
+		SELECT EXISTS (
+			SELECT 1
+			FROM company_delivery_route
+			WHERE
+				delivery_route_id = #{deliveryRouteId}
+				AND del_yn = 'N'
+		)
+	</select>
+
+    <!-- SELECT -->
+    <select id="selectCompanyDeliveryRouteList" resultType="com.jeil.delivery.system.domain.CompanyDTO">
+	    /* selectCompanyDeliveryRouteList */
+        SELECT
+            cdr.delivery_route_id, cdr.company_id,
+            co.company_nm, co.address, co.tel_no, co.manager_tel_no,
+            cdr.reg_id, cdr.reg_dt, cdr.chg_id, cdr.chg_dt, cdr.del_yn
+        FROM company_delivery_route cdr
+        INNER JOIN company co ON
+        	co.company_id = cdr.company_id
+        WHERE cdr.delivery_route_id = #{deliveryRouteId}
+        	AND cdr.del_yn = 'N'
+        	<if test='companyId != null and companyId != ""'>
+				AND cdr.company_id = #{companyId}
+        	</if>
+    </select>
+
+	<!-- (회사 <-> 배송코스 매핑) -->
+	<insert id="insertCompanyAndDeliberyRoute" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+		/* insertCompanyAndDeliberyRoute */
+		INSERT INTO company_delivery_route(
+			delivery_route_id, delivery_route_cd, company_id,
+			reg_id, chg_id, del_yn
+		)
+		VALUES(
+            #{param.deliveryRouteId},
+            #{param.deliveryRouteCd},
+            #{param.companyId},
+            #{memberInfo.memberId},
+            #{memberInfo.memberId},
+            'N'
+		)
+	</insert>
+
+    <!-- (회사 <-> 배송코스 update 매핑) -->
+    <update id="updateCompanyAndDeliveryRoute" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* updateCompanyAndDeliveryRoute */
+        UPDATE company_delivery_route
+        SET
+        	del_yn = 'N',
+            delivery_route_id = #{param.deliveryRouteId},
+            delivery_route_cd = #{param.deliveryRouteCd},
+            chg_id = #{memberInfo.memberId},
+            chg_dt = now()
+        WHERE delivery_route_id = #{param.origDeliveryRouteId}
+        	AND company_id = #{param.companyId}
+    </update>
+
+    <!-- (회사 <-> 배송코스 매핑 SOFT DELETE) -->
+    <update id="deleteCompanyAndDeliveryRoute" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* deleteCompanyAndDeliveryRoute */
+        UPDATE company_delivery_route
+        SET
+            del_yn = 'Y',
+            chg_id = #{memberInfo.memberId},
+            chg_dt = now()
+        WHERE delivery_route_id = #{param.deliveryRouteId}
+        	AND company_id = #{param.companyId}
+    </update>
+
+    <!-- (회사 <-> 배송코스 매핑 Hard DELETE) -->
+    <delete id="deleteCompanyAndDeliveryRouteById" parameterType="com.jeil.delivery.system.domain.CompanyDTO">
+    	/* deleteCompanyAndDeliveryRouteById */
+        DELETE FROM company_delivery_route WHERE company_id = #{companyId}
+    </delete>
+</mapper>

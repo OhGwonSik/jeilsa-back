@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.common.auth.audit.mapper.AuditMapper">
+
+    <select id="getAuditTableMetaList" resultType="com.common.auth.audit.dto.AuditTableMetaDTO">
+        SELECT AT.target_id
+             , AT.table_name
+             , AT.table_column
+             , AT.description
+             , (
+                 SELECT STRING_AGG(KCU.column_name, ',' ORDER BY KCU.ordinal_position)
+                   FROM information_schema.table_constraints TC
+                   JOIN information_schema.key_column_usage KCU
+                     ON TC.constraint_name = KCU.constraint_name
+                    AND TC.table_schema   = KCU.table_schema
+                  WHERE TC.table_schema   = '${schema}'
+                    AND TC.table_name     = AT.table_name
+                    AND TC.constraint_type = 'PRIMARY KEY'
+               ) AS "pkColumnsCsv"
+          FROM audit_target AT
+         WHERE AT.del_yn = TRUE
+         ORDER BY AT.table_name, AT.table_column
+    </select>
+
+    <insert id="insertAuditLog" parameterType="com.common.auth.audit.dto.AuditLogDTO">
+        INSERT INTO audit_log
+        (
+            target_id
+          , table_name, table_column
+          , operation, transaction_status
+          , value_old
+          , value_new
+          , user_id
+          , request_ip
+          , reg_id
+          , chg_id
+          , del_yn
+        )
+        VALUES
+        (
+            #{targetId}
+          , #{tableName}, #{tableColumn}
+          , #{operation}, #{transactionStatus}
+          , <choose>
+              <when test='valueOldType == "Integer"'>
+                #{valueOld, typeHandler=com.common.auth.common.config.IntegerTypeHandler,jdbcType=OTHER}
+              </when>
+              <otherwise>
+                #{valueOld}
+              </otherwise>
+            </choose>
+          , <choose>
+              <when test='valueNewType == "Integer"'>
+                #{valueNew, typeHandler=com.common.auth.common.config.IntegerTypeHandler,jdbcType=OTHER}
+              </when>
+              <otherwise>
+                #{valueNew}
+              </otherwise>
+            </choose>
+          , #{userId}
+          , #{requestIp,typeHandler=com.common.auth.common.config.InetAddressTypeHandler,jdbcType=OTHER}
+          , #{regId}
+          , #{chgId}
+          , #{delYn}
+        )
+    </insert>
+
+    <select id="selectRowColumns" resultType="com.common.auth.audit.dto.KeyValueDTO">
+        <foreach collection="columns" item="col" separator=" UNION ALL ">
+            SELECT '${col}' AS key
+                 , CASE 
+                       WHEN TBL.${col} IS NULL THEN 'null'
+                       ELSE to_json(TBL.${col})::text
+                   END AS value
+             FROM ${tableName} TBL
+            <where>
+                <foreach collection="pkConditions" item="pk" separator=" AND ">
+                    <choose>
+                        <when test='pk.columnType == "Integer"'>
+                            TBL.${pk.columnName} = #{pk.value}
+                        </when>
+                        <otherwise>
+                            TBL.${pk.columnName} = #{pk.value}
+                        </otherwise>
+                    </choose>
+                </foreach>
+            </where>
+        </foreach>
+    </select>
+
+
+</mapper>

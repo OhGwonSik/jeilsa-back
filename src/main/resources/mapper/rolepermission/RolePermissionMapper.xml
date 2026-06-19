@@ -1,0 +1,521 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.rolepermission.mapper.RolePermissionMapper">
+    <resultMap id="RolePermissionResultMap" type="com.common.auth.rolepermission.domain.RolePermission">
+        <id property="roleId" column="role_id" />
+        <id property="permissionId" column="permission_id" />
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <resultMap id="RolePermissionResponseMap" type="com.common.auth.rolepermission.dto.RolePermissionResponse">
+        <id property="roleId" column="role_id" />
+        <id property="permissionId" column="permission_id" />
+        <result property="roleName" column="role_name"/>
+        <result property="permissionName" column="permission_name"/>
+        <result property="description" column="description"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <select id="selectRolePermissionsByRoleId" resultMap="RolePermissionResultMap">
+        SELECT 
+            rp.role_id, 
+            rp.permission_id, 
+            rp.reg_id,
+            rp.reg_dt,
+            rp.chg_id, 
+            rp.chg_dt, 
+            rp.del_id, 
+            rp.del_dt, 
+            rp.del_yn
+        FROM 
+            role_permission rp
+        INNER JOIN 
+            role r
+            ON 
+                rp.role_id = r.role_id
+        INNER JOIN 
+            permission p
+            ON 
+                rp.permission_id = p.permission_id
+        WHERE 
+            rp.role_id = #{roleId}
+    </select>
+
+    <select id="selectRolePermissionsByPermissionId" resultMap="RolePermissionResultMap">
+        SELECT 
+            rp.role_id, 
+            rp.permission_id, 
+            rp.reg_id,
+            rp.reg_dt,
+            rp.chg_id,  
+            rp.chg_dt, 
+            rp.del_id, 
+            rp.del_dt, 
+            rp.del_yn
+        FROM 
+            role_permission rp
+        INNER JOIN 
+            role r
+            ON 
+                rp.role_id = r.role_id
+        INNER JOIN 
+            permission p
+            ON 
+                rp.permission_id = p.permission_id
+        WHERE 
+            rp.permission_id = #{permissionId}
+    </select>
+
+    <insert id="insertRolePermission" parameterType="com.common.auth.rolepermission.domain.RolePermission">
+        INSERT INTO 
+            role_permission (
+                role_id, 
+                permission_id, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES (
+             #{roleId},
+             #{permissionId},
+             #{regId},
+             COALESCE(#{regDt}, NOW()),
+             #{chgId},
+             COALESCE(#{chgDt}, NOW()),
+             #{delYn}
+        )
+    </insert>
+
+    <insert id="insertRolePermissionsBulk" parameterType="list">
+        INSERT INTO 
+            role_permission (
+                role_id, 
+                permission_id, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES
+        <foreach collection="rolePermissions" item="rolePermission" separator=",">
+            ( 
+                #{rolePermission.roleId},
+                #{rolePermission.permissionId},
+                #{rolePermission.regId},
+                COALESCE(#{rolePermission.regDt}, NOW()),
+                #{rolePermission.chgId},
+                COALESCE(#{rolePermission.chgDt}, NOW()),
+                #{rolePermission.delYn}
+            )
+        </foreach>
+    </insert>
+
+    <delete id="deleteRolePermissionsByRoleId">
+        DELETE FROM 
+            role_permission
+        WHERE 
+            role_id = #{roleId}
+    </delete>
+
+    <delete id="deleteRolePermissionsByPermissionId">
+        DELETE FROM 
+            role_permission
+        WHERE 
+            permission_id = #{permissionId}
+    </delete>
+
+    <delete id="deleteRolePermissionByRoleIdAndPermissionId">
+        DELETE FROM 
+            role_permission
+        WHERE 
+            role_id = #{roleId}
+        AND 
+            permission_id = #{permissionId}
+    </delete>
+
+    <select id="selectRolePermissionByRoleIdAndPermissionId" resultMap="RolePermissionResultMap">
+        SELECT 
+            role_id, 
+            permission_id, 
+            reg_id,
+            reg_dt,
+            chg_id, 
+            chg_dt, 
+            del_id,
+            del_dt,
+            del_yn
+        FROM 
+            role_permission
+        INNER JOIN
+            role r
+            ON 
+                rp.role_id = r.role_id
+        INNER JOIN
+            permission p
+            ON 
+                rp.permission_id = p.permission_id
+        WHERE 
+            role_id = #{roleId}
+        AND 
+            permission_id = #{permissionId}
+    </select>
+
+    <select id="selectAllRolePermissions" resultMap="RolePermissionResultMap">
+        SELECT 
+            rp.role_id, 
+            rp.permission_id, 
+            rp.reg_id,
+            rp.reg_dt,
+            rp.chg_id, 
+            rp.chg_dt, 
+            rp.del_id,
+            rp.del_dt,
+            rp.del_yn
+        FROM 
+            role_permission rp
+        INNER JOIN
+            role r
+            ON 
+                rp.role_id = r.role_id
+        INNER JOIN
+            permission p
+            ON 
+                rp.permission_id = p.permission_id
+        ORDER BY 
+            rp.reg_dt DESC
+    </select>
+
+    <select id="selectAllRolePermissionsWithPaging" resultMap="RolePermissionResultMap">
+        SELECT 
+            rp.role_id, 
+            rp.permission_id, 
+            rp.reg_id,
+            rp.reg_dt,
+            rp.chg_id, 
+            rp.chg_dt, 
+            rp.del_id,
+            rp.del_dt,
+            rp.del_yn
+        FROM 
+            role_permission rp
+        INNER JOIN
+            role r
+            ON 
+                rp.role_id = r.role_id
+        INNER JOIN
+            permission p
+            ON 
+                rp.permission_id = p.permission_id
+        ORDER BY 
+            rp.reg_dt DESC
+    </select>
+
+    <update id="updateRolePermission" parameterType="com.common.auth.rolepermission.domain.RolePermission">
+        UPDATE 
+            role_permission
+        SET 
+            chg_id = #{chgId},
+            chg_dt = COALESCE(#{chgDt}, NOW()),
+            del_yn = #{delYn}
+        WHERE 
+            role_id = #{roleId}
+        AND 
+            permission_id = #{permissionId}
+    </update>
+
+    <update id="updateRolePermissionsBulk" parameterType="list">
+        UPDATE 
+            role_permission
+        SET 
+            del_yn = CASE
+                <foreach collection="rolePermissions" item="item" separator=" ">
+                    <choose>
+                        <when test="item.delYn != null">
+                            WHEN (role_id = #{item.roleId}
+                                  AND permission_id = #{item.permissionId})
+                            THEN #{item.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{item.roleId}
+                                  AND permission_id = #{item.permissionId})
+                            THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE 
+                <foreach collection="rolePermissions" item="item" separator=" ">
+                    <choose>
+                        <when test="item.chgId != null">
+                            WHEN (role_id = #{item.roleId}
+                                  AND permission_id = #{item.permissionId})
+                            THEN #{item.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{item.roleId}
+                                  AND permission_id = #{item.permissionId})
+                            THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="rolePermissions" item="item" separator=" ">
+                    <choose>
+                        <when test="item.chgDt != null">
+                            WHEN (role_id = #{item.roleId}
+                                  AND permission_id = #{item.permissionId})
+                            THEN COALESCE(#{item.chgDt}, NOW())
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{item.roleId}
+                                  AND permission_id = #{item.permissionId})
+                            THEN chg_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = 
+                <foreach collection="rolePermissions" item="item" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="item.delYn != null and item.delYn == true">
+                            WHEN role_id = #{item.roleId} AND permission_id = #{item.permissionId} THEN NULL::uuid
+                        </when>
+                        <when test="item.delId != null">
+                            WHEN role_id = #{item.roleId} AND permission_id = #{item.permissionId} THEN #{item.delId}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{item.roleId} AND permission_id = #{item.permissionId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_dt = 
+                <foreach collection="rolePermissions" item="item" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="item.delYn != null and item.delYn == true">
+                            WHEN role_id = #{item.roleId} AND permission_id = #{item.permissionId} THEN NULL::timestamp
+                        </when>
+                        <when test="item.delDt != null">
+                            WHEN role_id = #{item.roleId} AND permission_id = #{item.permissionId} THEN #{item.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN role_id = #{item.roleId} AND permission_id = #{item.permissionId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+        WHERE 
+            (role_id, permission_id) IN 
+            <foreach collection="rolePermissions" item="item" open="(" separator="," close=")">
+                (#{item.roleId},
+                 #{item.permissionId})
+            </foreach>
+    </update>
+
+    <select id="selectExistsByRoleIdAndPermissionId" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 
+                1 
+            FROM 
+                role_permission rolePermission
+            
+            WHERE 
+                role_id = #{roleId}
+            AND 
+                permission_id = #{permissionId}
+        )
+    </select>
+
+    <select id="selectRolePermissionsWithFilter" resultMap="RolePermissionResponseMap">
+        SELECT 
+            rp.role_id, 
+            rp.permission_id, 
+            r.role_name,
+            p.permission_name,
+            p.description,
+            rp.reg_id,
+            rp.reg_dt,
+            rp.chg_id, 
+            rp.chg_dt, 
+            rp.del_id,
+            rp.del_dt,
+            rp.del_yn
+        FROM 
+            role_permission rp
+        INNER JOIN 
+            role r
+            ON 
+                rp.role_id = r.role_id
+        INNER JOIN 
+            permission p
+            ON 
+                rp.permission_id = p.permission_id
+        <where>
+            <if test="filter.roleIds != null and filter.roleIds.size() > 0">
+                AND rp.role_id IN
+                <foreach collection="filter.roleIds" item="roleId" open="(" close=")" separator=","> 
+                    #{roleId}
+                </foreach>
+            </if>
+            <if test="filter.permissionIds != null and filter.permissionIds.size() > 0">
+                AND rp.permission_id IN
+                <foreach collection="filter.permissionIds" item="permissionId" open="(" close=")" separator=","> 
+                    #{permissionId}
+                </foreach>
+            </if>
+            <if test="filter.roleName != null and filter.roleName.trim() != ''">
+                AND r.role_name ILIKE '%' || #{filter.roleName} || '%'
+            </if>
+            <if test="filter.permissionName != null and filter.permissionName.trim() != ''">
+                AND p.permission_name ILIKE '%' || #{filter.permissionName} || '%'
+            </if>
+            <if test="filter.delYn != null">
+                AND rp.del_yn = #{filter.delYn}
+            </if>
+        </where>
+        ORDER BY rp.reg_dt DESC
+    </select>
+
+    <select id="selectExistingRolePermissionsByCompositeKeys" resultMap="RolePermissionResultMap">
+        SELECT 
+            rp.role_id, 
+            rp.permission_id, 
+            rp.reg_id,
+            rp.reg_dt,
+            rp.chg_id, 
+            rp.chg_dt, 
+            rp.del_id,
+            rp.del_dt,
+            rp.del_yn
+        FROM 
+            role_permission rp
+        INNER JOIN
+            role r
+            ON 
+                rp.role_id = r.role_id
+        INNER JOIN
+            permission p
+            ON 
+                rp.permission_id = p.permission_id
+        WHERE 
+            (rp.role_id, rp.permission_id) IN 
+            <foreach collection="rolePermissions" item="rolePermission" open="(" close=")" separator=",">
+                (#{rolePermission.roleId}, #{rolePermission.permissionId})
+            </foreach>
+    </select>
+
+    <update id="softDeleteRolePermissionsBulk" parameterType="list">
+        UPDATE 
+            role_permission
+        SET 
+            del_yn = CASE
+                <foreach collection="rolePermissions" item="rolePermission" separator=" ">
+                    <choose>
+                        <when test="rolePermission.delYn != null">
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN #{rolePermission.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE
+                <foreach collection="rolePermissions" item="rolePermission" separator=" ">
+                    <choose>
+                        <when test="rolePermission.chgId != null">
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN #{rolePermission.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE
+                <foreach collection="rolePermissions" item="rolePermission" separator=" ">
+                    <choose>
+                        <when test="rolePermission.chgDt != null">
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN COALESCE(#{rolePermission.chgDt}, NOW())
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = CASE
+                <foreach collection="rolePermissions" item="rolePermission" separator=" ">
+                    <choose>
+                        <when test="rolePermission.delId != null">
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN #{rolePermission.delId}
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_id
+            END,
+            del_dt = CASE
+                <foreach collection="rolePermissions" item="rolePermission" separator=" ">
+                    <choose>
+                        <when test="rolePermission.delDt != null">
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN COALESCE(#{rolePermission.delDt}, NOW())
+                        </when>
+                        <otherwise>
+                            WHEN (role_id = #{rolePermission.roleId}
+                                  AND permission_id = #{rolePermission.permissionId})
+                            THEN NOW()
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_dt
+            END
+        WHERE 
+            (role_id, permission_id) IN 
+            <foreach collection="rolePermissions" item="rolePermission" open="(" close=")" separator=",">
+                (#{rolePermission.roleId}, #{rolePermission.permissionId})
+            </foreach>
+    </update>
+</mapper>

@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.common.auth.organizationrole.mapper.OrganizationRoleMapper">
+    <resultMap id="OrganizationRoleResultMap" type="com.common.auth.organizationrole.domain.OrganizationRole">
+        <id property="organizationId" column="organization_id" />
+        <id property="organizationName" column="organization_name"/>
+        <id property="roleId" column="role_id" />
+        <id property="roleName" column="role_name"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <resultMap id="OrganizationRoleResponseResultMap" type="com.common.auth.organizationrole.dto.OrganizationRoleResponse">
+        <id property="organizationId" column="organization_id" />
+        <id property="organizationName" column="organization_name"/>
+        <id property="roleId" column="role_id" />
+        <id property="roleName" column="role_name"/>
+        <result property="regId" column="reg_id" />
+        <result property="regDt" column="reg_dt"/>
+        <result property="chgId" column="chg_id" />
+        <result property="chgDt" column="chg_dt"/>
+        <result property="delId" column="del_id" />
+        <result property="delDt" column="del_dt"/>
+        <result property="delYn" column="del_yn"/>
+    </resultMap>
+
+    <sql id="organizationRoleColumns">
+        role_id, organization_id, reg_id, reg_dt, chg_id, chg_dt, del_id, del_dt, del_yn
+    </sql>
+    
+    <select id="findByOrganizationId" resultMap="OrganizationRoleResultMap">
+        SELECT 
+            <include refid="organizationRoleColumns" />
+        FROM 
+            organization_role
+        WHERE 
+            organization_id = #{organizationId}
+    </select>
+    
+    <select id="findByRoleId" resultMap="OrganizationRoleResultMap">
+        SELECT 
+            <include refid="organizationRoleColumns" />
+        FROM 
+            organization_role
+        WHERE 
+            role_id = #{roleId}
+    </select>
+    
+    <select id="findAllOrganizationRoles" resultMap="OrganizationRoleResultMap">
+        SELECT 
+            <include refid="organizationRoleColumns" />
+        FROM 
+            organization_role
+    </select>
+
+    <insert id="insert" parameterType="com.common.auth.organizationrole.domain.OrganizationRole">
+        INSERT INTO 
+            organization_role (
+                role_id, 
+                organization_id, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES (
+            #{roleId},
+            #{organizationId},
+            #{regId},
+            COALESCE(#{regDt}, NOW()),
+            #{chgId},
+            COALESCE(#{chgDt}, NOW())
+            #{delYn}
+        )
+    </insert>
+    
+    <insert id="insertOrganizationRolesBulk" parameterType="list">
+        INSERT INTO 
+            organization_role (
+                role_id, 
+                organization_id, 
+                reg_id,
+                reg_dt,
+                chg_id, 
+                chg_dt, 
+                del_yn
+            )
+        VALUES
+        <foreach collection="organizationRoles" item="organizationRole" separator=",">
+            (
+                #{organizationRole.roleId},
+                #{organizationRole.organizationId},
+                #{organizationRole.regId},
+                COALESCE(#{organizationRole.regDt}, NOW()),
+                #{organizationRole.chgId},
+                COALESCE(#{organizationRole.chgDt}, NOW()),
+                #{organizationRole.delYn}
+            )
+        </foreach>
+    </insert>
+
+    <update id="updateOrganizationRolesBulk" parameterType="list">
+        UPDATE 
+            organization_role
+        SET
+            del_yn = CASE
+                <foreach collection="organizationRoles" item="organizationRole" separator=" ">
+                    <choose>
+                        <when test="organizationRole.delYn != null">
+                            WHEN organization_id = #{organizationRole.organizationId}
+                            AND role_id = #{organizationRole.roleId}
+                            THEN #{organizationRole.delYn}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organizationRole.organizationId}
+                            AND role_id = #{organizationRole.roleId}
+                            THEN del_yn
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE 
+                <foreach collection="organizationRoles" item="organizationRole" separator=" ">
+                    <choose>
+                        <when test="organizationRole.chgId != null">
+                            WHEN organization_id = #{organizationRole.organizationId}
+                            AND role_id = #{organizationRole.roleId}
+                            THEN #{organizationRole.chgId}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organizationRole.organizationId}
+                            AND role_id = #{organizationRole.roleId}
+                            THEN chg_id
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE 
+                <foreach collection="organizationRoles" item="organizationRole" separator=" ">
+                    <choose>
+                        <when test="organizationRole.chgDt != null">
+                            WHEN organization_id = #{organizationRole.organizationId}
+                            AND role_id = #{organizationRole.roleId}
+                            THEN #{organizationRole.chgDt}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organizationRole.organizationId}
+                            AND role_id = #{organizationRole.roleId}
+                            THEN chg_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = 
+                <foreach collection="organizationRoles" item="organizationRole" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="organizationRole.delYn != null and organizationRole.delYn == true">
+                            WHEN organization_id = #{organizationRole.organizationId} AND role_id = #{organizationRole.roleId} THEN NULL::uuid
+                        </when>
+                        <when test="organizationRole.delId != null">
+                            WHEN organization_id = #{organizationRole.organizationId} AND role_id = #{organizationRole.roleId} THEN #{organizationRole.delId}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organizationRole.organizationId} AND role_id = #{organizationRole.roleId} THEN del_id
+                        </otherwise>
+                    </choose>
+                </foreach>,
+            del_dt = 
+                <foreach collection="organizationRoles" item="organizationRole" open="CASE" separator=" " close="END">
+                    <choose>
+                        <when test="organizationRole.delYn != null and organizationRole.delYn == true">
+                            WHEN organization_id = #{organizationRole.organizationId} AND role_id = #{organizationRole.roleId} THEN NULL::timestamp
+                        </when>
+                        <when test="organizationRole.delDt != null">
+                            WHEN organization_id = #{organizationRole.organizationId} AND role_id = #{organizationRole.roleId} THEN #{organizationRole.delDt}
+                        </when>
+                        <otherwise>
+                            WHEN organization_id = #{organizationRole.organizationId} AND role_id = #{organizationRole.roleId} THEN del_dt
+                        </otherwise>
+                    </choose>
+                </foreach>
+        WHERE (organization_id, role_id) IN (
+            <foreach collection="organizationRoles" item="organizationRole" separator=",">
+                (#{organizationRole.organizationId},
+                 #{organizationRole.roleId})
+            </foreach>
+        )
+    </update>
+    
+    <delete id="deleteByOrganizationId">
+        DELETE FROM organization_role WHERE organization_id = #{organizationId}
+    </delete>
+    
+    <delete id="deleteByRoleId">
+        DELETE FROM organization_role WHERE role_id = #{roleId}
+    </delete>
+    
+    <delete id="deleteByOrganizationIdAndRoleId">
+        DELETE FROM organization_role WHERE organization_id = #{organizationId} AND role_id = #{roleId}
+    </delete>
+    
+    <select id="existsByOrganizationIdAndRoleId" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM organization_role WHERE organization_id = #{organizationId} AND role_id = #{roleId})
+    </select>
+    
+    <delete id="deleteOrganizationRoleByOrganizationIdAndRoleId">
+        DELETE FROM organization_role WHERE organization_id = #{organizationId} AND role_id = #{roleId}
+    </delete>
+    
+    <delete id="deleteOrganizationRolesBulk" parameterType="java.util.List">
+        DELETE FROM organization_role
+        WHERE (organization_id, role_id) IN 
+        <foreach collection="organizationRoles" item="orgRole" open="(" close=")" separator="),(">
+            #{orgRole.organizationId},
+            #{orgRole.roleId}
+        </foreach>
+    </delete>
+    
+    <select id="selectOrganizationRolesWithFilter" resultMap="OrganizationRoleResultMap">
+        SELECT 
+            ors.organization_id, 
+            ors.role_id, 
+            o.organization_name, 
+            r.role_name, 
+            ors.reg_id,
+            ors.reg_dt,
+            ors.chg_id, 
+            ors.chg_dt, 
+            ors.del_id,
+            ors.del_dt,
+            ors.del_yn
+        FROM organization_role ors
+        INNER JOIN organization o ON ors.organization_id = o.organization_id
+        INNER JOIN role r ON ors.role_id = r.role_id
+        <where>
+            <if test="filter.organizationIds != null and filter.organizationIds.size() > 0">
+                AND ors.organization_id IN
+                <foreach collection="filter.organizationIds" item="organizationId" open="(" close=")" separator=","> #{organizationId}
+                </foreach>
+            </if>
+            <if test="filter.roleIds != null and filter.roleIds.size() > 0">
+                AND ors.role_id IN
+                <foreach collection="filter.roleIds" item="roleId" open="(" close=")" separator=","> #{roleId}
+                </foreach>
+            </if>
+            <if test="filter.organizationName != null and filter.organizationName.trim() != ''">
+                AND o.organization_name ILIKE '%' || #{filter.organizationName} || '%'
+            </if>
+            <if test="filter.roleName != null and filter.roleName.trim() != ''">
+                AND r.role_name ILIKE '%' || #{filter.roleName} || '%'
+            </if>
+            <if test="filter.delYn != null">
+                AND ors.del_yn = #{filter.delYn}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectExistingOrganizationRolesByCompositeKeys" resultMap="OrganizationRoleResultMap">
+        SELECT 
+            ors.organization_id, 
+            ors.role_id, 
+            ors.reg_id,
+            ors.reg_dt,
+            ors.chg_id, 
+            ors.chg_dt, 
+            ors.del_id,
+            ors.del_dt,
+            ors.del_yn
+        FROM 
+            organization_role ors
+        INNER JOIN organization o ON ors.organization_id = o.organization_id
+        INNER JOIN role r ON ors.role_id = r.role_id
+        WHERE 
+            (ors.organization_id, ors.role_id) IN 
+            <foreach collection="organizationRoles" item="organizationRole" open="(" close=")" separator=",">
+                (#{organizationRole.organizationId}, #{organizationRole.roleId})
+            </foreach>
+    </select>
+
+    <update id="softDeleteOrganizationRolesBulk" parameterType="list">
+        UPDATE 
+            organization_role
+        SET 
+            del_yn = CASE
+                <foreach collection="organizationRoles" item="organizationRole" separator=" ">
+                    WHEN (organization_id = #{organizationRole.organizationId}
+                          AND role_id = #{organizationRole.roleId})
+                    THEN #{organizationRole.delYn}
+                </foreach>
+                ELSE del_yn
+            END,
+            chg_id = CASE
+                <foreach collection="organizationRoles" item="organizationRole" separator=" ">
+                    WHEN (organization_id = #{organizationRole.organizationId}
+                          AND role_id = #{organizationRole.roleId})
+                    THEN #{organizationRole.chgId}
+                </foreach>
+                ELSE chg_id
+            END,
+            chg_dt = CASE
+                <foreach collection="organizationRoles" item="organizationRole" separator=" ">
+                    WHEN (organization_id = #{organizationRole.organizationId}
+                          AND role_id = #{organizationRole.roleId})
+                    THEN COALESCE(#{organizationRole.chgDt}, NOW())
+                </foreach>
+                ELSE chg_dt
+            END,
+            del_id = CASE
+                <foreach collection="organizationRoles" item="organizationRole" separator=" ">
+                    WHEN (organization_id = #{organizationRole.organizationId}
+                          AND role_id = #{organizationRole.roleId})
+                    THEN #{organizationRole.delId}
+                </foreach>
+                ELSE del_id
+            END,
+            del_dt = CASE
+                <foreach collection="organizationRoles" item="organizationRole" separator=" ">
+                    WHEN (organization_id = #{organizationRole.organizationId}
+                          AND role_id = #{organizationRole.roleId})
+                    THEN COALESCE(#{organizationRole.delDt}, NOW())
+                </foreach>
+                ELSE del_dt
+            END
+        WHERE 
+            (organization_id, role_id) IN 
+            <foreach collection="organizationRoles" item="organizationRole" open="(" close=")" separator=",">
+                (#{organizationRole.organizationId}, #{organizationRole.roleId})
+            </foreach>
+    </update>
+</mapper>

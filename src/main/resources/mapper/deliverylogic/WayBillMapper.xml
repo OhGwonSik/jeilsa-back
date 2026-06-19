@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.deliverylogic.mapper.WayBillMapper">
+
+    <!-- SELECT -->
+    <select id="selectWaybillList" resultType="com.jeil.delivery.deliverylogic.domain.WayBillVO">
+        SELECT
+        w.waybill_id,
+        w.qty,
+        COALESCE(w.start_no, '') AS start_no,
+        COALESCE(w.end_no, '') AS end_no,
+        w.sender_company_id,
+        /* waybill에 값이 있으면 우선 사용, 없으면 company 테이블 값 사용 */
+        COALESCE(w.sender_company_nm, sender.company_nm) AS sender_company_nm,
+        w.sender_tel_no,
+        w.sender_manager_tel_no,
+        w.sender_address,
+        w.receiver_company_id,
+        /* waybill에 값이 있으면 우선 사용, 없으면 company 테이블 값 사용 */
+        COALESCE(w.receiver_company_nm, receiver.company_nm) AS receiver_company_nm,
+        w.receiver_tel_no,
+        w.receiver_manager_tel_no,
+        w.receiver_address,
+        w.reg_id,
+        w.reg_dt,
+        w.chg_id,
+        w.chg_dt,
+        w.del_yn
+        FROM waybill w
+        /* 구 데이터 조회를 위해 JOIN은 유지 */
+        LEFT JOIN company sender ON w.sender_company_id = sender.company_id
+        LEFT JOIN company receiver ON w.receiver_company_id = receiver.company_id
+        WHERE w.del_yn = 'N'
+        <if test='waybillId != null'>
+            AND w.waybill_id = #{waybillId}
+        </if>
+        <if test='senderCompanyNm != null and senderCompanyNm != ""'>
+            /* 검색 시 두 컬럼 모두 확인 */
+            AND (
+            w.sender_company_nm LIKE CONCAT('%', #{senderCompanyNm}, '%')
+            OR sender.company_nm LIKE CONCAT('%', #{senderCompanyNm}, '%')
+            )
+        </if>
+        <if test='receiverCompanyNm != null and receiverCompanyNm != ""'>
+            /* 검색 시 두 컬럼 모두 확인 */
+            AND (
+            w.receiver_company_nm LIKE CONCAT('%', #{receiverCompanyNm}, '%')
+            OR receiver.company_nm LIKE CONCAT('%', #{receiverCompanyNm}, '%')
+            )
+        </if>
+        <if test="searchNo != null and searchNo != ''">
+            AND (
+            w.start_no LIKE CONCAT('%', REPLACE(#{searchNo}, '-', ''), '%')
+            OR w.end_no LIKE CONCAT('%', REPLACE(#{searchNo}, '-', ''), '%')
+            )
+        </if>
+        ORDER BY w.waybill_id DESC
+    </select>
+
+
+
+    <!-- INSERT -->
+    <insert id="insertWaybill" parameterType="com.jeil.delivery.deliverylogic.domain.WayBillVO">
+        INSERT INTO waybill (
+            qty,
+            start_no,
+            end_no,
+            sender_company_id,
+            sender_company_nm,
+            sender_address,
+            sender_tel_no,
+            sender_manager_tel_no,
+            receiver_company_id,
+            receiver_company_nm,
+            receiver_address,
+            receiver_tel_no,
+            receiver_manager_tel_no,
+            charge_cd,
+            reg_id,
+            reg_dt,
+            chg_id,
+            chg_dt,
+            del_yn
+        ) VALUES (
+            #{qty},
+            REPLACE(#{startNo}, '-', ''),
+            REPLACE(#{endNo}, '-', ''),
+            #{senderCompanyId},
+            #{senderCompanyNm},
+            #{senderAddress},
+            #{senderTelNo},
+            #{senderManagerTelNo},
+            #{receiverCompanyId},
+            #{receiverCompanyNm},
+            #{receiverAddress},
+            #{receiverTelNo},
+            #{receiverManagerTelNo},
+            #{chargeCd},
+            #{regId},
+            now(),
+            #{chgId},
+            now(),
+            'N'
+        )
+    </insert>
+
+    <!-- UPDATE -->
+    <update id="updateWaybill" parameterType="com.jeil.delivery.deliverylogic.domain.WayBillVO">
+        UPDATE waybill
+        SET
+            qty = #{qty},
+            start_no = REPLACE(#{startNo}, '-', ''),
+            end_no = REPLACE(#{endNo}, '-', ''),
+            sender_company_id = #{senderCompanyId},
+            sender_company_nm = #{senderCompanyNm},
+            sender_address = #{senderAddress},
+            sender_tel_no = #{senderTelNo},
+            sender_manager_tel_no = #{senderManagerTelNo},
+            charge_cd = #{chargeCd},
+            receiver_company_id = #{receiverCompanyId},
+            receiver_company_nm = #{receiverCompanyNm},
+            receiver_address = #{receiverAddress},
+            receiver_tel_no = #{receiverTelNo},
+            receiver_manager_tel_no = #{receiverManagerTelNo},
+            chg_id = #{chgId},
+            chg_dt = now()
+        WHERE waybill_id = #{waybillId}
+    </update>
+
+    <!-- DELETE (Soft Delete) -->
+    <update id="deleteWaybill" parameterType="com.jeil.delivery.deliverylogic.domain.WayBillVO">
+        UPDATE waybill
+        SET del_yn = 'Y',
+            chg_id = #{chgId},
+            chg_dt = now()
+        WHERE waybill_id = #{waybillId}
+    </update>
+
+    <select id="printWaybill" resultType="com.jeil.delivery.deliverylogic.domain.WayBillVO">
+        /* printWaybill */
+        SELECT
+        wa.qty, wa.start_no, wa.end_no
+        , wa.sender_company_id as senderCompanyId, wa.receiver_company_id as receiverCompanyId, wa.charge_cd
+        /* COALESCE 적용 */
+        , COALESCE(wa.sender_company_nm, co1.company_nm) as senderCompanyNm
+        , wa.sender_address as senderAddress
+        , wa.sender_tel_no as senderTelNo, wa.sender_manager_tel_no as senderManagerTelNo
+        /* COALESCE 적용 */
+        , COALESCE(wa.receiver_company_nm, co2.company_nm) as receiverCompanyNm
+        , wa.receiver_address as receiverAddress
+        , wa.receiver_tel_no as receiverTelNo, wa.receiver_manager_tel_no as receiverManagerTelNo
+        FROM
+        waybill wa
+        /* JOIN 유지 */
+        LEFT JOIN company co1 ON
+        co1.company_id = wa.sender_company_id
+        LEFT JOIN company co2 ON
+        co2.company_id = wa.receiver_company_id
+        WHERE
+        waybill_id = #{waybillId}
+        AND wa.del_yn = 'N'
+    </select>
+    <!-- WayBillMapper.xml -->
+    <select id="selectWaybillListPaged" resultType="com.jeil.delivery.deliverylogic.domain.WayBillVO">
+        WITH base AS (
+        SELECT
+        w.waybill_id,
+        w.qty,
+        COALESCE(w.start_no, '') AS start_no,
+        COALESCE(w.end_no, '')   AS end_no,
+        w.sender_company_id,
+        /* COALESCE로 우선순위 지정 */
+        COALESCE(w.sender_company_nm, sender.company_nm) AS sender_company_nm,
+        w.sender_tel_no            AS sender_tel_no,
+        w.sender_manager_tel_no    AS sender_manager_tel_no,
+        COALESCE(w.sender_address, '') AS sender_address,
+        w.receiver_company_id,
+        /* COALESCE로 우선순위 지정 */
+        COALESCE(w.receiver_company_nm, receiver.company_nm) AS receiver_company_nm,
+        w.receiver_tel_no          AS receiver_tel_no,
+        w.receiver_manager_tel_no  AS receiver_manager_tel_no,
+        COALESCE(w.receiver_address, '') AS receiver_address,
+        w.reg_id, w.reg_dt, w.chg_id, w.chg_dt, w.del_yn,
+        w.charge_cd
+        FROM waybill w
+        /* JOIN 유지 */
+        LEFT JOIN company sender   ON w.sender_company_id   = sender.company_id
+        LEFT JOIN company receiver ON w.receiver_company_id = receiver.company_id
+        WHERE w.del_yn = 'N'
+        <if test="waybillId != null">
+            AND w.waybill_id = #{waybillId}
+        </if>
+        <!-- 🔍 발신처: 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+        <if test="senderCompanyNm != null and senderCompanyNm != ''">
+            AND (
+            w.sender_company_nm ILIKE CONCAT('%', #{senderCompanyNm}, '%')
+            OR sender.company_nm ILIKE CONCAT('%', #{senderCompanyNm}, '%')
+            OR (
+            LENGTH(regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')) = 4
+            AND (
+            RIGHT(regexp_replace(COALESCE(w.sender_tel_no, ''), '[^0-9]', '', 'g'), 4)
+            = regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')
+            OR
+            RIGHT(regexp_replace(COALESCE(w.sender_manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+            = regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')
+            )
+            )
+            )
+        </if>
+
+        <!-- 🔍 수신처: 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+        <if test="receiverCompanyNm != null and receiverCompanyNm != ''">
+            AND (
+            w.receiver_company_nm ILIKE CONCAT('%', #{receiverCompanyNm}, '%')
+            OR receiver.company_nm ILIKE CONCAT('%', #{receiverCompanyNm}, '%')
+            OR (
+            LENGTH(regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')) = 4
+            AND (
+            RIGHT(regexp_replace(COALESCE(w.receiver_tel_no, ''), '[^0-9]', '', 'g'), 4)
+            = regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')
+            OR
+            RIGHT(regexp_replace(COALESCE(w.receiver_manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+            = regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')
+            )
+            )
+            )
+        </if>
+        <if test="searchNo != null and searchNo != ''">
+            AND (
+            REPLACE(COALESCE(w.start_no, ''), '-', '') ILIKE ('%' || REPLACE(#{searchNo}, '-', '') || '%')
+            OR
+            REPLACE(COALESCE(w.end_no, ''),   '-', '') ILIKE ('%' || REPLACE(#{searchNo}, '-', '') || '%')
+            )
+        </if>
+        )
+        SELECT
+        waybill_id              AS waybillId,
+        qty,
+        start_no                AS startNo,
+        end_no                  AS endNo,
+        sender_company_id       AS senderCompanyId,
+        sender_company_nm       AS senderCompanyNm,
+        sender_tel_no           AS senderTelNo,
+        sender_manager_tel_no   AS senderManagerTelNo,
+        sender_address          AS senderAddress,
+        receiver_company_id     AS receiverCompanyId,
+        receiver_company_nm     AS receiverCompanyNm,
+        receiver_tel_no         AS receiverTelNo,
+        receiver_manager_tel_no AS receiverManagerTelNo,
+        receiver_address        AS receiverAddress,
+        reg_id AS regId, reg_dt AS regDt, chg_id AS chgId, chg_dt AS chgDt, del_yn AS delYn, charge_cd AS chargeCd,
+        COUNT(*) OVER()         AS total
+        FROM base b
+        <choose>
+            <when test="orderBy != null and orderBy != ''">
+                ORDER BY ${orderBy}
+            </when>
+            <otherwise>
+                ORDER BY b.waybill_id DESC
+            </otherwise>
+        </choose>
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+</mapper>

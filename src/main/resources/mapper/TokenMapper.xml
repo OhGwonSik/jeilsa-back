@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.mapper.TokenMapper">
+	<select id="getRefreshTokenByUser" resultType="com.jeil.delivery.domain.RefreshTokenVO">
+		/* getRefreshTokenByUser */
+		SELECT
+			rt.refresh_tokens_id, rt.member_id, rt.refresh_token
+			, rt.expire_dt, me.user_id
+		FROM
+			refresh_tokens rt
+		INNER JOIN member me
+			ON me.member_id = rt.member_id
+		WHERE
+			refresh_token = #{refreshToken}
+	</select>
+
+	<select id="getRefreshTokenByMemberId" resultType="com.jeil.delivery.domain.RefreshTokenVO">
+		/* getRefreshTokenByMemberId */
+		SELECT
+				rt.refresh_tokens_id, rt.member_id, rt.refresh_token
+				, rt.expire_dt, me.user_id
+			FROM
+				refresh_tokens rt
+			INNER JOIN member me
+				ON me.member_id = rt.member_id
+			WHERE
+				rt.member_id = #{memberId}
+	</select>
+
+	<insert id="insertRefreshToken" parameterType="com.jeil.delivery.domain.RefreshTokenVO">
+		/* insertRefreshToken */
+		INSERT INTO refresh_tokens (
+			member_id, refresh_token, expire_dt
+			, reg_id, chg_id
+		)
+		VALUES(
+			#{memberId}, #{refreshToken}, #{expireDt}
+			, #{memberId}, #{memberId}
+		)
+	</insert>
+	<delete id="deleteRefreshTokenById" parameterType="com.jeil.delivery.domain.RefreshTokenVO">
+		/* deleteRefreshTokenById */
+ 		DELETE FROM refresh_tokens WHERE member_id = #{memberId}
+	</delete>
+
+	<delete id="deleteRefreshToken" parameterType="com.jeil.delivery.domain.RefreshTokenVO">
+		/* deleteRefreshToken */
+ 		DELETE FROM refresh_tokens WHERE member_id = #{memberId} AND refresh_token = #{refreshToken}
+	</delete>
+</mapper>

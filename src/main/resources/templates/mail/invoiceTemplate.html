@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="|${invoice.year}년 ${invoice.month}월 청구서|"></title>
+    <style>
+        body { font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; }
+        table { border-collapse: collapse; width: 620px; font-size: 11px; margin-top: 5px; }
+        td, th { border: 1px solid #000; padding: 5px; text-align: center; }
+        .tbl01 th { background-color: #EFEFEF; }
+        .header-top { border-top: 5px solid #000; }
+        .header-bottom { border-top: 1px solid #EFEFEF; border-bottom: 3px double #000; padding: 10px 0; }
+        .total-amount { font-size: 16px; font-weight: bold; letter-spacing: 0.2em; }
+        .link-container { padding: 10px; text-align: center; }
+        .link-style { font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div style="margin: 0 auto; width: 620px;">
+    <table>
+        <tbody>
+            <tr>
+                <td class="header-top">
+                    <div style="font-size: 25px; font-weight: bold;" th:text="${invoice.billCompanyInfo.billCompanyNm}"></div>
+                </td>
+            </tr>
+            <tr>
+                <td class="header-bottom">
+                    우 : <span style="padding-left: 15px;" th:text="${invoice.billCompanyInfo.billAddress}"></span>
+                    <span style="padding-left: 15px;" th:text="|T. ${invoice.billCompanyInfo.billTelNo}|"></span>
+                    <span style="padding-left: 15px;" th:text="|F. ${invoice.billCompanyInfo.billFaxNo}|"></span>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table style="border: 1px solid #000;">
+        <tbody>
+            <tr>
+                <td colspan="8" style="font-size: 13px; font-weight: bold;" th:text="|${invoice.month}월 택배/통신 청구 내역서|"></td>
+            </tr>
+            <tr>
+                <td rowspan="4" width="20" style="letter-spacing: 15px; padding: 5px 10px;">공급받는자</td>
+                <td rowspan="2" width="90" style="vertical-align: middle; letter-spacing: 0.4em;">상 호 명</td>
+                <td rowspan="2" width="150" style="vertical-align: middle;" th:text="${invoice.companyInfo.companyNm}"></td>
+                <td rowspan="4" width="25" style="letter-spacing: 15px; padding: 5px 10px; line-height: 20px;">공급자</td>
+                <td width="80">사업자번호</td>
+                <td colspan="3" th:text="${invoice.billCompanyInfo.billBizNo}"></td>
+            </tr>
+            <tr>
+                <td width="80">상 호</td>
+                <td width="80" th:text="${invoice.billCompanyInfo.billCompanyNm}"></td>
+                <td width="80">대표자</td>
+                <td width="80" th:text="${invoice.billCompanyInfo.billRepresentativeNm}"></td>
+            </tr>
+            <tr>
+                <td rowspan="2" style="vertical-align: middle; letter-spacing: 2em;">기간</td>
+                <td rowspan="2" th:text="|${invoice.companyInfo.startDate} ~ ${invoice.companyInfo.endDate}|"></td>
+                <td>사업장주소</td>
+                <td colspan="3" th:text="${invoice.billCompanyInfo.billAddress}"></td>
+            </tr>
+            <tr>
+                <td>업태</td>
+                <td th:text="${invoice.billCompanyInfo.billBizType}"></td>
+                <td>종목</td>
+                <td th:text="${invoice.billCompanyInfo.billBizItem}"></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table>
+        <tbody>
+            <tr>
+                <td colspan="6" style="font-size: 13px; font-weight: bold;">
+                    <span th:text="|${invoice.month}월|"></span> 청구 금액
+                </td>
+            </tr>
+            <tr>
+                <td rowspan="3" width="100" style="vertical-align: middle;">
+                    <span th:text="|${invoice.month}월|"></span> 청구금액<br>(VAT포함)
+                </td>
+                <td rowspan="3" width="200" class="total-amount" th:text="|￦${#numbers.formatDecimal(invoice.allTotAmount, 0, 'COMMA', 0, 'POINT')}|"></td>
+                <td width="80">기본운임료</td>
+                <td width="80" th:text="${#numbers.formatDecimal(invoice.communicationFee, 0, 'COMMA', 0, 'POINT') ?: '0'}"></td>
+                <td width="80">부 가 세</td>
+                <td width="80" th:text="${#numbers.formatDecimal(invoice.communicationFeeVat, 0, 'COMMA', 0, 'POINT') ?: '0'}"></td>
+            </tr>
+            <tr>
+                <td>운 임 금 액</td>
+                <td th:text="${#numbers.formatDecimal(invoice.totAmount, 0, 'COMMA', 0, 'POINT') ?: '0'}"></td>
+                <td>부 가 세</td>
+                <td th:text="${#numbers.formatDecimal(invoice.totAmountVat, 0, 'COMMA', 0, 'POINT') ?: '0'}"></td>
+            </tr>
+            <tr>
+                <td>입 금 계 좌</td>
+                <td colspan="3" th:text="${invoice.billCompanyInfo.billAccountInfo}"></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table class="tbl01" style="margin-top:5px;width:620px;empty-cells:show;border-collapse:collapse;font-size:11px;">
+	    <tbody>
+	        <tr>
+	            <td colspan="11" style="text-align:center;padding:5px;font-size:13px;font-weight:bold;border:1px solid #000;">
+	                종류별 수량 합산표
+	            </td>
+	        </tr>
+	        <tr>
+	            <th rowspan="2" style="border:1px solid #000;background-color:#EFEFEF;text-align:center;padding:5px 0;">구분</th>
+	            <th colspan="2" style="border:1px solid #000;background-color:#EFEFEF;text-align:center;padding:5px 0;">통신</th>
+	            <th colspan="2" style="border:1px solid #000;background-color:#EFEFEF;text-align:center;padding:5px 0;">택배</th>
+	        </tr>
+	        <tr>
+	            <th style="border:1px solid #000;background-color:#EFEFEF;text-align:center;padding:5px 0;">선불</th>
+	            <th style="border:1px solid #000;background-color:#EFEFEF;text-align:center;padding:5px 0;">도착분</th>
+	            <th style="border:1px solid #000;background-color:#EFEFEF;text-align:center;padding:5px 0;">선불</th>
+	            <th style="border:1px solid #000;background-color:#EFEFEF;text-align:center;padding:5px 0;">착불</th>
+	        </tr>
+
+            <tr th:each="category : ${categories}">
+                <td th:text="${category}"></td>
+
+                <th:block th:each="data : ${invoice.companyInvoiceByKindList}" th:if="${#strings.trim(data.kindGroup) == #strings.trim(category)}">
+                    <td th:text="${data.communicationPrepaid == 0 ? '' : #numbers.formatInteger(data.communicationPrepaid, 0)}"></td>
+                    <td th:text="${data.communicationCollect == 0 ? '' : #numbers.formatInteger(data.communicationCollect, 0)}"></td>
+                    <td th:text="${data.deliveryPrepaid == 0 ? '' : #numbers.formatInteger(data.deliveryPrepaid, 0)}"></td>
+                    <td th:text="${data.deliveryCollect == 0 ? '' : #numbers.formatInteger(data.deliveryCollect, 0)}"></td>
+                </th:block>
+
+			    <th:block th:if="${!invoice.companyInvoiceByKindList.![kindGroup].contains(category)}">
+			        <td></td>
+			        <td></td>
+			        <td></td>
+			        <td></td>
+			    </th:block>
+            </tr>
+
+	        <tr>
+	            <th style="padding:3px;font-size:13px;font-weight:bold;border:1px solid #000;background-color:#EFEFEF;">계</th>
+				<td th:text="${#numbers.formatInteger(invoice.totalCommunicationPrepaid, 0)}"></td>
+				<td th:text="${#numbers.formatInteger(invoice.totalCommunicationCollect, 0)}"></td>
+				<td th:text="${#numbers.formatInteger(invoice.totalDeliveryPrepaid, 0)}"></td>
+				<td th:text="${#numbers.formatInteger(invoice.totalDeliveryCollect, 0)}"></td>
+	        </tr>
+	    </tbody>
+	</table>
+
+    <table style="width: 620px;">
+        <tbody>
+            <tr>
+                <th style="width: 500px; padding: 10px; font-size: 13px; font-weight: bold;">총 수량</th>
+                <th style="font-size: 13px; font-weight: bold;" th:text="${#numbers.formatInteger(invoice.totalQty, 0)}"></th>
+            </tr>
+        </tbody>
+    </table>
+	<div class="link-container">
+        상세 내역을 확인하시려면
+        <a th:href="@{${url}+ '/bill/invoice/detail/' + ${billId} + '/' + ${billDtlId}}"
+           target="_blank" class="link-style">이곳</a>을 클릭하세요
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,617 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.billing.mapper.BillDtlMapper">
+
+	<!-- 청구업체 / 청구 년도 / 청구 월 / 청구 일자 구분(20,30)별 운송정보(청구목록) 조회 -->
+	<sql id="selectTransportByMonthListForBillDtl">
+	    <![CDATA[
+	    WITH RECURSIVE period_params AS (
+	        SELECT
+	            TO_CHAR(CASE
+	                WHEN #{param.billCd} = '30' THEN DATE_TRUNC('month', MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1))::date
+	                WHEN #{param.billCd} = '20' THEN ((MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1) - INTERVAL '1 month') + INTERVAL '20 day')::date
+	            END, 'YYYY-MM-DD') AS start_dt,
+	            TO_CHAR(CASE
+	                WHEN #{param.billCd} = '30' THEN (DATE_TRUNC('month', MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1)) + INTERVAL '1 month')::date
+	                WHEN #{param.billCd} = '20' THEN (MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1) + INTERVAL '20 day')::date
+	            END, 'YYYY-MM-DD') AS end_dt
+	    ),
+	    ultimate_parent_map AS (
+	        SELECT company_id, excclc_company_id AS parent_id, excclc_company_id AS ultimate_id, 1 AS level
+	        FROM shipper WHERE del_yn = 'N' AND use_yn = 'Y'
+	        UNION ALL
+	        SELECT upm.company_id, s.excclc_company_id, s.excclc_company_id, upm.level + 1
+	        FROM ultimate_parent_map upm
+	        INNER JOIN shipper s ON upm.ultimate_id = s.company_id
+	        WHERE s.del_yn = 'N' AND s.use_yn = 'Y'
+	            AND upm.ultimate_id != s.excclc_company_id
+	            AND upm.level < 4
+	    ),
+	    final_parent_map AS MATERIALIZED (
+	        SELECT DISTINCT ON (company_id)
+	            company_id,
+	            ultimate_id
+	        FROM ultimate_parent_map upm
+	        WHERE EXISTS (
+	            SELECT 1
+	            FROM shipper boss_sh
+	            WHERE boss_sh.company_id = upm.ultimate_id
+	                AND boss_sh.bill_company_id = #{param.billCompanyId}
+	                AND boss_sh.bill_stdr_cd = #{param.billCd}
+	                AND boss_sh.del_yn = 'N'
+	                AND boss_sh.use_yn = 'Y'
+	        )
+	        ORDER BY company_id, level DESC
+	    ),
+	    transport_by_month AS MATERIALIZED (
+	        SELECT
+	            tr.transport_id,
+	            trd.transport_dtl_id,
+	            trd.calculation_cd,
+	            trd.amount,
+	            fpm.ultimate_id AS boss_id,
+	            1 AS bill_dtl_dgre
+	        FROM transport_dtl trd
+	        CROSS JOIN period_params pp
+	        INNER JOIN transport tr ON tr.transport_id = trd.transport_id
+	            AND tr.del_yn = 'N'
+	        INNER JOIN final_parent_map fpm ON fpm.company_id = tr.sender_company_id
+	        WHERE trd.del_yn = 'N'
+	            AND trd.calculation_target_cd = 'SENDER'
+	            AND trd.shipment_operation_date >= pp.start_dt
+	            AND trd.shipment_operation_date < pp.end_dt
+
+	        UNION ALL
+
+	        SELECT
+	            tr.transport_id,
+	            trd.transport_dtl_id,
+	            trd.calculation_cd,
+	            trd.amount,
+	            fpm.ultimate_id AS boss_id,
+	            1 AS bill_dtl_dgre
+	        FROM transport_dtl trd
+	        CROSS JOIN period_params pp
+	        INNER JOIN transport tr ON tr.transport_id = trd.transport_id
+	            AND tr.del_yn = 'N'
+	        INNER JOIN final_parent_map fpm ON fpm.company_id = tr.receiver_company_id
+	        WHERE trd.del_yn = 'N'
+	            AND trd.calculation_target_cd = 'RECEIVER'
+	            AND trd.shipment_operation_date >= pp.start_dt
+	            AND trd.shipment_operation_date < pp.end_dt
+	    )
+	    ]]>
+	</sql>
+
+	<!-- 청구회사-정산그룹업체별 내역 추출-->
+	<select id="selectBillDtlByTransportData" resultType="com.jeil.delivery.billing.domain.BillDTO">
+		/* selectBillDtlByTransportData - 화주업체 거래내역 무관 청구 포함 */
+		<include refid="selectTransportByMonthListForBillDtl"></include>
+		<!-- 운송 내역 그룹화 (마스터 ID 기준) -->
+		,
+	    /* 실적 기반 집계 (보스 ID 기준) */
+	    transport_by_month_settled_group AS (
+	        SELECT
+	            tbm.transport_id,
+	            tbm.boss_id AS calculation_company_id,
+	            SUM(CASE WHEN tbm.calculation_cd = 'QTY' THEN tbm.amount ELSE 0 END) AS untpc,
+	            ROUND(SUM(CASE WHEN tbm.calculation_cd = 'QTY' THEN tbm.amount ELSE 0 END) * 0.1) AS untpc_vat,
+	            SUM(CASE WHEN tbm.calculation_cd = 'WEIGHT' THEN tbm.amount ELSE 0 END) AS weight_untpc,
+	            ROUND(SUM(CASE WHEN tbm.calculation_cd = 'WEIGHT' THEN tbm.amount ELSE 0 END) * 0.1) AS weight_untpc_vat,
+	            tbm.bill_dtl_dgre
+	        FROM transport_by_month tbm
+	        GROUP BY tbm.transport_id, tbm.boss_id, tbm.bill_dtl_dgre
+	    ),
+	    companies_with_transport AS (
+	        SELECT DISTINCT calculation_company_id FROM transport_by_month_settled_group
+	    ),
+	    bill_company_calculation_company_total_mapping AS (
+	        SELECT
+	            tbmsg.calculation_company_id,
+	            COALESCE(MAX(sh_group.communication_fee), 0) AS communication_fee,
+	            ROUND(COALESCE(MAX(sh_group.communication_fee), 0) * 0.1) AS communication_fee_vat,
+	            SUM(tbmsg.untpc) AS untpc, SUM(tbmsg.untpc_vat) AS untpc_vat,
+	            SUM(tbmsg.weight_untpc) AS weight_untpc, SUM(tbmsg.weight_untpc_vat) AS weight_untpc_vat,
+	            COUNT(tbmsg.transport_id) AS tot_count, tbmsg.bill_dtl_dgre
+	        FROM transport_by_month_settled_group tbmsg
+	        LEFT JOIN shipper sh_group ON sh_group.company_id = tbmsg.calculation_company_id AND sh_group.shipper_cd = 'COM' AND sh_group.del_yn = 'N'
+	        GROUP BY tbmsg.calculation_company_id, tbmsg.bill_dtl_dgre
+	    ),
+	    /* 미실적 통신비 전용 업체 (보스 ID 기준) */
+	    shipper_companies_without_transport AS (
+	        SELECT
+	            CAST(fpm.ultimate_id AS INTEGER) AS calculation_company_id,
+	            MAX(sh.communication_fee) AS communication_fee,
+	            ROUND(MAX(sh.communication_fee) * 0.1) AS communication_fee_vat,
+	            0 AS untpc, 0 AS untpc_vat, 0 AS weight_untpc, 0 AS weight_untpc_vat, 0 AS tot_count, 1 AS bill_dtl_dgre
+	        FROM shipper sh
+	        INNER JOIN final_parent_map fpm ON fpm.company_id = sh.company_id
+		    INNER JOIN shipper boss_sh ON boss_sh.company_id = fpm.ultimate_id
+		        AND boss_sh.bill_company_id = #{param.billCompanyId}
+    			AND boss_sh.bill_stdr_cd = #{param.billCd}
+		        AND boss_sh.use_yn = 'Y'
+		        AND boss_sh.del_yn = 'N'
+	        INNER JOIN company c ON c.company_id = sh.company_id AND c.shipper_yn = 'Y' AND c.del_yn = 'N'
+	        LEFT JOIN companies_with_transport cwt ON cwt.calculation_company_id = fpm.ultimate_id
+	        WHERE sh.del_yn = 'N' AND sh.shipper_cd = 'COM'
+	          AND sh.bill_stdr_cd = #{param.billCd} AND sh.bill_company_id = #{param.billCompanyId}
+	          AND cwt.calculation_company_id IS NULL
+	          AND sh.communication_fee > 0
+	        GROUP BY fpm.ultimate_id
+	    )
+	    /* 최종 통합 출력 */
+	    SELECT
+	         calculation_company_id
+	        , (SELECT company_nm FROM company WHERE company_id = calculation_company_id) AS company_nm
+	        , communication_fee, communication_fee_vat, untpc, untpc_vat, weight_untpc, weight_untpc_vat
+	        , (communication_fee + communication_fee_vat + untpc + untpc_vat + weight_untpc + weight_untpc_vat) AS tot_amount
+	        , tot_count, bill_dtl_dgre, #{param.billId} AS bill_id
+	    FROM (
+	        SELECT * FROM bill_company_calculation_company_total_mapping
+	        UNION ALL
+	        SELECT * FROM shipper_companies_without_transport
+	    ) final_all
+	    ORDER BY tot_count DESC, tot_amount DESC
+	</select>
+
+	<!-- SELECT -->
+    <select id="selectBillHistoryDtlList" resultType="com.jeil.delivery.billing.domain.BillDtlVO">
+    	/* selectBillHistoryDtlList */
+		SELECT
+		    bid.bill_dtl_id, bid.calculation_company_id, com.company_nm, com.email
+		    , com.fax_no, bid.bill_id, bid.bill_dtl_dgre, bid.tot_amount
+		    , bid.tot_count, bid.communication_fee, bid.communication_fee_vat
+		    , bid.untpc, bid.untpc_vat, bid.weight_untpc, bid.weight_untpc_vat
+		    , bid.reg_id, bid.reg_dt, bid.chg_id, bid.chg_dt, bid.del_yn
+		    , CONCAT(TO_CHAR(mh.send_dt, 'YYYY-MM-DD HH24:MI:SS'), ' ', co.code_nm) AS send_status
+		FROM bill_dtl bid
+		INNER JOIN company com
+		       ON com.company_id = bid.calculation_company_id
+		INNER JOIN (
+		    SELECT bill_id, calculation_company_id, MAX(bill_dtl_dgre) AS max_dgre
+		    FROM bill_dtl
+		    WHERE del_yn = 'N'
+		    GROUP BY bill_id, calculation_company_id
+		) maxdgre
+		       ON bid.bill_id = maxdgre.bill_id
+		      AND bid.calculation_company_id = maxdgre.calculation_company_id
+		      AND bid.bill_dtl_dgre = maxdgre.max_dgre
+		LEFT JOIN (
+		    SELECT
+		    	mh1.bill_id, mh1.bill_dtl_id, mh1.send_dt, mh1.mail_status_cd
+		    FROM
+		    	mail_history mh1
+		    INNER JOIN (
+		        SELECT
+		        	bill_id, bill_dtl_id, MAX(send_dt) AS latest_send_dt
+		        FROM
+		        	mail_history
+		        WHERE
+		        	del_yn = 'N'
+		        GROUP BY
+		        	bill_id, bill_dtl_id
+		    ) mh2
+		      ON mh1.bill_id = mh2.bill_id
+		     AND mh1.bill_dtl_id = mh2.bill_dtl_id
+		     AND mh1.send_dt = mh2.latest_send_dt
+		    WHERE
+		    	mh1.del_yn = 'N'
+		) mh
+		   ON mh.bill_id = bid.bill_id
+		  AND mh.bill_dtl_id = bid.bill_dtl_id
+		LEFT JOIN code co ON
+			co.code_val = mh.mail_status_cd
+			AND co.type = 'MAIL_STATUS'
+			AND co.del_yn = 'N'
+		WHERE
+			bid.del_yn = 'N'
+			<if test='billId != null and billId != 0'>
+				AND bid.bill_id = #{billId}
+			</if>
+			<if test='billDtlId != null and billDtlId != 0'>
+				AND bid.bill_dtl_id = #{billDtlId}
+			</if>
+			<if test='companyNm != null and companyNm != ""'>
+				AND UPPER(com.company_nm) like UPPER(CONCAT('%',#{companyNm},'%'))
+			</if>
+		ORDER BY
+			com.company_nm DESC
+    </select>
+
+    <!-- 엑셀용 데이터 조회 -->
+    <select id="selectTaxInvoiceExcelData" resultType="com.jeil.delivery.billing.domain.TaxInvoiceExcelDTO">
+    	/* selectTaxInvoiceExcelData */
+    	SELECT
+			bd.calculation_company_id, com.company_nm AS calculation_company_nm, REPLACE(com.biz_no, '-','') AS biz_no
+			, com.address, com.representative_nm, com.biz_type, com.biz_item, com.email
+			, bi.bill_company_id, bc.company_nm AS bill_company_nm, REPLACE(bc.biz_no, '-','') AS bill_biz_no
+			, bc.address AS bill_address, bc.representative_nm AS bill_representative_nm, bc.biz_type AS bill_biz_type, bc.biz_item AS bill_biz_item, bc.email AS bill_email
+			, bi.year, bi.month, bi.bill_cd
+			, (bd.tot_amount - (COALESCE(bd.communication_fee_vat,0)) - (COALESCE(bd.untpc_vat,0))- (COALESCE(bd.weight_untpc_vat,0))) AS tot_amount
+			, (COALESCE(bd.communication_fee_vat,0) + COALESCE(bd.untpc_vat,0) + COALESCE(bd.weight_untpc_vat,0)) AS tot_amount_vat
+			, bd.communication_fee, bd.communication_fee_vat
+			, (bd.untpc + bd.weight_untpc) AS use_fee
+			, (bd.untpc_vat + bd.weight_untpc_vat) AS use_fee_vat
+		FROM
+			bill_dtl bd
+		INNER JOIN bill bi ON
+			bi.bill_id = bd.bill_id
+			AND bi.del_yn = 'N'
+		INNER JOIN bill_company bc ON
+			bc.bill_company_id = bi.bill_company_id
+			AND bc.del_yn = 'N'
+		INNER JOIN company com ON
+			com.company_id = bd.calculation_company_id
+			AND com.del_yn = 'N'
+		INNER JOIN shipper shi ON
+			shi.company_id = com.company_id
+			AND shi.taxbil_output_yn = 'Y'
+			AND shi.del_yn = 'N'
+		WHERE
+			bi."year" = #{year}
+			AND bi."month" = #{month}
+			AND bi.bill_cd = #{billCd}
+			AND bi.bill_company_id = #{billCompanyId}
+			AND bd.del_yn = 'N'
+			AND bd.bill_dtl_dgre = (
+				SELECT
+					MAX(bd2.bill_dtl_dgre)
+				FROM
+					bill_dtl bd2
+				WHERE
+					bd2.bill_id = bd.bill_id
+					AND bd2.calculation_company_id = bd.calculation_company_id
+					AND bd2.del_yn = 'N'
+			)
+		ORDER BY
+			convert_to(com.company_nm, 'EUC_KR')
+    </select>
+
+    <!-- 회사별 청구내역 - 청구서용 -->
+    <select id="selectCompanyBillDataList" resultType="com.jeil.delivery.billing.domain.BillDTO">
+    	/* selectCompanyBillDataList */
+		SELECT
+		    btd.transport_id, bt.sender_company_nm, bt.receiver_company_nm
+		    ,CASE
+		        WHEN bt.receiver_tel_no ~ '^02\d{7,8}$'
+		            THEN REGEXP_REPLACE(bt.receiver_tel_no, '(^02)(\d{3,4})(\d{4}$)', '\1-\2-\3')
+		        WHEN bt.receiver_tel_no ~ '^01\d{8,9}$'
+		            THEN REGEXP_REPLACE(bt.receiver_tel_no, '(^01\d{1})(\d{3,4})(\d{4}$)', '\1-\2-\3')
+		        WHEN bt.receiver_tel_no ~ '^0\d{9,10}$'
+		            THEN REGEXP_REPLACE(bt.receiver_tel_no, '(^0\d{2})(\d{3,4})(\d{4}$)', '\1-\2-\3')
+		        ELSE bt.receiver_tel_no
+		    END AS receiver_tel_no
+		    , btd.calculation_cd, btd.calculation_target_cd, btd.kind_cd, co1.code_nm AS kind_nm
+			, CASE
+		        WHEN btd.calculation_cd = 'QTY' AND bt.charge_cd = 'CH003' THEN 'CH001'
+		        ELSE bt.charge_cd
+		      END AS charge_cd
+		    , CASE
+		        WHEN btd.calculation_cd = 'QTY' AND bt.charge_cd = 'CH003' THEN '선불'
+		        ELSE co2.code_nm
+		      END AS charge_nm
+		    , SUM(btd.qty) AS qty, btd.untpc, SUM(btd.amount) AS amount
+		    , SUM((btd.qty * COALESCE(btd.untpc,0))) AS total_amount
+		    , to_char(btd.shipment_operation_date::date, 'MM-DD') AS bill_date
+		FROM
+			bill_transport_dtl btd
+		INNER JOIN bill_transport bt ON
+			bt.transport_id = btd.transport_id
+			AND bt.bill_id = btd.bill_id
+			AND bt.bill_dtl_id = btd.bill_dtl_id
+			AND bt.bill_dtl_dgre = btd.bill_dtl_dgre
+			AND bt.del_yn = 'N'
+		INNER JOIN bill_dtl bd ON
+			bd.bill_id = #{billId}
+			AND bd.bill_dtl_id = btd.bill_dtl_id
+			AND bd.del_yn = 'N'
+			AND bd.bill_dtl_dgre = (
+				SELECT
+					MAX(bd2.bill_dtl_dgre)
+				FROM
+					bill_dtl bd2
+				WHERE
+					bd2.bill_id = bd.bill_id
+					AND bd2.calculation_company_id = btd.calculation_company_id
+					AND bd2.del_yn = 'N'
+			)
+		INNER JOIN bill b ON
+			b.bill_id = bd.bill_id
+		INNER JOIN bill_company bco ON
+			bco.bill_company_id = b.bill_company_id
+		INNER JOIN code co1
+		       ON co1.code_val = btd.kind_cd
+		      AND co1.type = 'KIND_TYPE'
+		INNER JOIN code co2
+		       ON co2.code_val = bt.charge_cd
+		      AND co2.type = 'CHARGE'
+		WHERE
+			btd.bill_id = #{billId}
+			AND btd.calculation_company_id = #{calculationCompanyId}
+			AND btd.del_yn = 'N'
+			AND b."year" = #{year}
+			AND b."month" = #{month}
+			AND b.bill_cd = #{billCd}
+			AND b.bill_company_id = #{billCompanyId}
+		GROUP BY
+			btd.transport_id, bt.sender_company_nm, bt.receiver_company_nm
+			, bt.receiver_tel_no
+		    , btd.calculation_cd, btd.calculation_target_cd, btd.kind_cd, co1.code_nm , bt.charge_cd, co2.code_nm
+		    , btd.untpc
+		    , btd.shipment_operation_date::date
+		ORDER BY btd.shipment_operation_date::date, btd.transport_id
+    </select>
+
+    <select id="selectCompanyBillDataListByKindCd" resultType="com.jeil.delivery.billing.domain.CompanyInvoiceByKindCdDTO">
+    	/* selectCompanyBillDataListByKindCd */
+		SELECT
+		    CASE
+		        WHEN btd.kind_cd = 'TAC0201' THEN '서류'
+		        WHEN btd.kind_cd = 'TAC0203' THEN '롤'
+		        WHEN btd.kind_cd = 'TAC0204' THEN '샘플'
+		        ELSE '기타'
+		    END AS kind_group
+		    , SUM(CASE WHEN UPPER(btd.calculation_cd) = 'WEIGHT' AND btd.calculation_target_cd = 'SENDER' THEN btd.qty ELSE 0 END) AS communication_prepaid
+		    , SUM(CASE WHEN UPPER(btd.calculation_cd) = 'WEIGHT' AND btd.calculation_target_cd = 'RECEIVER' THEN btd.qty ELSE 0 END) AS communication_collect
+		    , SUM(CASE WHEN UPPER(btd.calculation_cd) = 'QTY' AND UPPER(bt.charge_cd) = 'CH001' THEN btd.qty ELSE 0 END) AS delivery_prepaid
+		    , SUM(CASE WHEN UPPER(btd.calculation_cd) = 'QTY' AND UPPER(bt.charge_cd) = 'CH002' THEN btd.qty ELSE 0 END) AS delivery_collect
+		    , SUM(btd.qty) AS total_qty
+		    , SUM(btd.amount) AS total_amount
+		FROM bill_transport_dtl btd
+		INNER JOIN bill_transport bt ON
+			bt.transport_id = btd.transport_id
+			AND bt.bill_id = btd.bill_id
+			AND bt.bill_dtl_id = btd.bill_dtl_id
+			AND bt.bill_dtl_dgre = btd.bill_dtl_dgre
+			AND bt.del_yn = 'N'
+		INNER JOIN bill_dtl bd ON
+		    bd.bill_id = #{billId}
+		    AND bd.bill_dtl_id = btd.bill_dtl_id
+		    AND bd.del_yn = 'N'
+		    AND bd.bill_dtl_dgre = (
+		        SELECT MAX(bd2.bill_dtl_dgre)
+		        FROM bill_dtl bd2
+		        WHERE bd2.bill_id = bd.bill_id
+		          AND bd2.calculation_company_id = btd.calculation_company_id
+		          AND bd2.del_yn = 'N'
+		    )
+		INNER JOIN bill b ON b.bill_id = bd.bill_id
+		WHERE
+		    btd.bill_id = #{billId}
+		    AND btd.calculation_company_id = #{calculationCompanyId}
+		    AND btd.del_yn = 'N'
+		    AND b."year" = #{year}
+		    AND b."month" = #{month}
+		    AND b.bill_cd = #{billCd}
+		    AND b.bill_company_id = #{billCompanyId}
+		GROUP BY kind_group
+    </select>
+
+    <!-- 이메일용 상세내역 페이지 파라미터 조회 -->
+    <select id="selectCompanyDetailInvoicePage" resultType="com.jeil.delivery.billing.domain.BillDTO">
+    	/* selectCompanyDetailInvoicePage */
+    	SELECT
+			b."year", b."month", b.bill_cd, b.bill_company_id
+			, bd.calculation_company_id
+		FROM
+			bill b
+		INNER JOIN bill_dtl bd ON
+			bd.bill_id = b.bill_id
+			AND bd.del_yn = 'N'
+		WHERE
+			b.del_yn = 'N'
+			AND b.bill_id = #{billId}
+			AND bd.bill_dtl_id = #{billDtlId}
+    </select>
+
+    <!-- INSERT -->
+    <insert id="insertBillDtl" parameterType="com.jeil.delivery.billing.domain.BillDTO">
+    	/* insertBillDtl */
+        INSERT INTO bill_dtl (
+            bill_id, bill_dtl_dgre, calculation_company_id,
+            tot_amount, tot_count, communication_fee, communication_fee_vat,
+            untpc, untpc_vat, weight_untpc, weight_untpc_vat,
+            reg_id, chg_id, del_yn
+        ) VALUES
+         <foreach collection="param" item="item" separator=",">
+	        (
+	            #{item.billId}, #{item.billDtlDgre}, #{item.calculationCompanyId},
+	            #{item.totAmount}, #{item.totCount}, #{item.communicationFee}, #{item.communicationFeeVat},
+	            #{item.untpc}, #{item.untpcVat}, #{item.weightUntpc}, #{item.weightUntpcVat},
+	            #{memberInfo.memberId}, #{memberInfo.memberId}, 'N'
+	        )
+         </foreach>
+    </insert>
+
+    <!-- (정산그룹업체별 재계산 / transport 내역 기반으로 insert) -->
+    <insert id="insertBillDtlReCalculation" parameterType="com.jeil.delivery.billing.domain.BillDTO" keyProperty="param.billDtlId" keyColumn="bill_dtl_id" useGeneratedKeys="true">
+    	/* insertBillDtlReCalculation - 화주업체 거래내역 무관 재계산 */
+    	<include refid="selectTransportByMonthListForBillDtl"></include>
+		,
+	    /* 필터링 CTE 추가 */
+	    filtered_transport AS (
+	        SELECT *
+	        FROM transport_by_month
+	        WHERE boss_id = #{param.calculationCompanyId}
+	    ),
+	    latest_dgre AS (
+	        SELECT calculation_company_id, MAX(bill_dtl_dgre) AS max_dgre
+	        FROM bill_dtl
+	        WHERE bill_id = #{param.billId}
+	          AND calculation_company_id = #{param.calculationCompanyId}
+	          AND del_yn = 'N'
+	        GROUP BY calculation_company_id
+	    ),
+	    transport_agg AS (
+	        SELECT
+	            tbm.boss_id AS calculation_company_id,
+	            SUM(CASE WHEN tbm.calculation_cd = 'QTY' THEN tbm.amount ELSE 0 END) AS untpc,
+	            SUM(CASE WHEN tbm.calculation_cd = 'WEIGHT' THEN tbm.amount ELSE 0 END) AS weight_untpc,
+	            COUNT(DISTINCT tbm.transport_id) AS tot_count
+	        FROM filtered_transport tbm
+	        GROUP BY tbm.boss_id
+	    ),
+		/* 해당 업체의 통신비 설정 정보 조회 */
+		current_comm_setting AS (
+		    SELECT
+		        fpm.ultimate_id AS calculation_company_id,
+		        MAX(s.communication_fee) AS communication_fee
+		    FROM shipper s
+		    INNER JOIN final_parent_map fpm ON fpm.company_id = s.company_id
+		    INNER JOIN shipper boss_sh ON boss_sh.company_id = fpm.ultimate_id
+		        AND boss_sh.bill_company_id = #{param.billCompanyId}
+		        AND boss_sh.bill_stdr_cd = #{param.billCd}
+		        AND boss_sh.use_yn = 'Y'
+		        AND boss_sh.del_yn = 'N'
+		        AND boss_sh.shipper_cd = 'COM'
+		    WHERE fpm.ultimate_id = #{param.calculationCompanyId}
+		      AND s.bill_company_id = #{param.billCompanyId}
+		      AND s.bill_stdr_cd = #{param.billCd}
+		      AND s.shipper_cd = 'COM'
+		      AND s.del_yn = 'N' AND s.use_yn = 'Y'
+		    GROUP BY fpm.ultimate_id
+		)
+		INSERT INTO bill_dtl (
+		    bill_id, bill_dtl_dgre, calculation_company_id,
+		    tot_amount, tot_count, communication_fee, communication_fee_vat,
+		    untpc, untpc_vat, weight_untpc, weight_untpc_vat,
+		    reg_id, chg_id, del_yn
+		)
+		SELECT
+		    #{param.billId},
+		    COALESCE(ld.max_dgre, 0) + 1,
+		    base.calculation_company_id,
+		    /* 총액 계산: (공급가액 합산 * 1.1) */
+		    ROUND((COALESCE(ccs.communication_fee, 0) + COALESCE(tag.untpc, 0) + COALESCE(tag.weight_untpc, 0)) * 1.1),
+		    COALESCE(tag.tot_count, 0),
+		    COALESCE(ccs.communication_fee, 0),
+		    ROUND(COALESCE(ccs.communication_fee, 0) * 0.1),
+		    COALESCE(tag.untpc, 0),
+		    ROUND(COALESCE(tag.untpc, 0) * 0.1),
+		    COALESCE(tag.weight_untpc, 0),
+		    ROUND(COALESCE(tag.weight_untpc, 0) * 0.1),
+		    #{memberInfo.memberId}, #{memberInfo.memberId}, 'N'
+		FROM (SELECT CAST(#{param.calculationCompanyId} AS INTEGER) AS calculation_company_id) base
+		LEFT JOIN latest_dgre ld ON ld.calculation_company_id = base.calculation_company_id
+		LEFT JOIN transport_agg tag ON tag.calculation_company_id = base.calculation_company_id
+		LEFT JOIN current_comm_setting ccs ON ccs.calculation_company_id = base.calculation_company_id
+		WHERE base.calculation_company_id = #{param.calculationCompanyId}
+    </insert>
+
+    <!-- (전체 재계산 / transport 내역 기반으로 insert) -->
+    <insert id="insertBillDtlReCalculationAll" parameterType="com.jeil.delivery.billing.domain.BillDTO">
+    	/* insertBillDtlReCalculationAll - 화주업체 거래내역 무관 재계산 */
+    	<include refid="selectTransportByMonthListForBillDtl"></include>
+		,
+	    latest_dgre AS (
+	        SELECT calculation_company_id, MAX(bill_dtl_dgre) AS max_dgre
+	        FROM bill_dtl WHERE bill_id = #{param.billId} AND del_yn = 'N'
+	        GROUP BY calculation_company_id
+	    ),
+	    transport_agg AS (
+	        SELECT
+	            tbm.boss_id AS calculation_company_id,
+	            SUM(CASE WHEN tbm.calculation_cd = 'QTY' THEN tbm.amount ELSE 0 END) AS untpc,
+	            ROUND(SUM(CASE WHEN tbm.calculation_cd = 'QTY' THEN tbm.amount ELSE 0 END) * 0.1) AS untpc_vat,
+	            SUM(CASE WHEN tbm.calculation_cd = 'WEIGHT' THEN tbm.amount ELSE 0 END) AS weight_untpc,
+	            ROUND(SUM(CASE WHEN tbm.calculation_cd = 'WEIGHT' THEN tbm.amount ELSE 0 END) * 0.1) AS weight_untpc_vat,
+	            COUNT(DISTINCT tbm.transport_id) AS tot_count
+	        FROM transport_by_month tbm
+	        GROUP BY tbm.boss_id
+	    ),
+		current_comm_setting AS (
+		    SELECT
+		        fpm.ultimate_id AS calculation_company_id,
+		        MAX(s.communication_fee) AS communication_fee
+		    FROM shipper s
+		    INNER JOIN final_parent_map fpm ON fpm.company_id = s.company_id
+		    INNER JOIN shipper boss_sh ON boss_sh.company_id = fpm.ultimate_id
+		        AND boss_sh.bill_company_id = #{param.billCompanyId}
+		        AND boss_sh.bill_stdr_cd = #{param.billCd}
+		        AND boss_sh.use_yn = 'Y'
+		        AND boss_sh.del_yn = 'N'
+		        AND boss_sh.shipper_cd = 'COM'
+		    WHERE s.bill_company_id = #{param.billCompanyId}
+		      AND s.bill_stdr_cd = #{param.billCd}
+		      AND s.shipper_cd = 'COM'
+		      AND s.del_yn = 'N' AND s.use_yn = 'Y'
+		    GROUP BY fpm.ultimate_id
+		),
+	    all_targets AS (
+	        SELECT calculation_company_id FROM bill_dtl WHERE bill_id = #{param.billId} AND del_yn = 'N'
+	        UNION SELECT calculation_company_id FROM transport_agg
+	        UNION SELECT calculation_company_id FROM current_comm_setting
+	    )
+	    INSERT INTO bill_dtl (
+	        bill_id, bill_dtl_dgre, calculation_company_id, tot_amount, tot_count,
+	        communication_fee, communication_fee_vat, untpc, untpc_vat, weight_untpc, weight_untpc_vat,
+	        reg_id, chg_id, del_yn
+	    )
+	    SELECT
+	        #{param.billId}, COALESCE(ld.max_dgre, 0) + 1, act.calculation_company_id,
+	        (COALESCE(ccs.communication_fee, 0) + ROUND(COALESCE(ccs.communication_fee, 0) * 0.1) +
+	         COALESCE(tag.untpc, 0) + COALESCE(tag.untpc_vat, 0) +
+	         COALESCE(tag.weight_untpc, 0) + COALESCE(tag.weight_untpc_vat, 0)) AS tot_amount,
+	        COALESCE(tag.tot_count, 0), COALESCE(ccs.communication_fee, 0), ROUND(COALESCE(ccs.communication_fee, 0) * 0.1),
+	        COALESCE(tag.untpc, 0), COALESCE(tag.untpc_vat, 0), COALESCE(tag.weight_untpc, 0), COALESCE(tag.weight_untpc_vat, 0),
+	        #{memberInfo.memberId}, #{memberInfo.memberId}, 'N'
+	    FROM all_targets act
+	    LEFT JOIN latest_dgre ld ON ld.calculation_company_id = act.calculation_company_id
+	    LEFT JOIN current_comm_setting ccs ON ccs.calculation_company_id = act.calculation_company_id
+	    LEFT JOIN transport_agg tag ON tag.calculation_company_id = act.calculation_company_id
+    </insert>
+
+
+    <!-- 정산 시 년, 월, 청구 일에 해당하는 shipment 테이블 정산여부 Y로 UPDATE -->
+    <update id="updateShipmentSettleStatus" parameterType="com.jeil.delivery.billing.domain.BillVO">
+    	/* updateShipmentSettleStatus */
+    	<![CDATA[
+   	    UPDATE shipment
+		    SET settle_yn = 'Y',
+		        chg_id = #{memberInfo.memberId},
+		        chg_dt = NOW()
+		    WHERE
+		        del_yn = 'N'
+		        AND settle_yn = 'N'
+		        AND reg_dt >= CASE
+		                         WHEN #{param.billCd} = '20' THEN (CAST(#{param.year} || '-' || #{param.month} || '-01' AS date) - INTERVAL '1 month') + INTERVAL '20 days'
+		                         ELSE CAST(#{param.year} || '-' || #{param.month} || '-01' AS date)
+		                      END
+		        AND reg_dt < CASE
+		                         WHEN #{param.billCd} = '20' THEN CAST(#{param.year} || '-' || #{param.month} || '-20' AS date) + INTERVAL '1 day'
+		                         ELSE CAST(#{param.year} || '-' || #{param.month} || '-01' AS date) + INTERVAL '1 month'
+		                      END
+		]]>
+    </update>
+
+    <!-- UPDATE -->
+    <update id="updateBillHistoryDtl" parameterType="com.jeil.delivery.billing.domain.BillDtlVO">
+        UPDATE bill_history_dtl
+        SET
+            bill_status_cd = #{billStatusCd},
+            tot_amount = #{totAmount},
+            bass_amount = #{bassAmount},
+            bass_amount_vat = #{bassAmountVat},
+            delivery_amount = #{deliveryAmount},
+            delivery_amount_vat = #{deliveryAmountVat},
+            edi_amount = #{ediAmount},
+            edi_amount_vat = #{ediAmountVat},
+            chg_id = #{chgId},
+            chg_dt = #{chgDt}
+        WHERE bill_company_id = #{billCompanyId}
+          AND year = #{year}
+          AND month = #{month}
+    </update>
+
+    <!-- DELETE (Soft Delete) -->
+    <update id="deleteBillHistoryDtl" parameterType="com.jeil.delivery.billing.domain.BillDtlVO">
+        UPDATE bill_history_dtl
+        SET del_yn = 'Y',
+            chg_id = #{chgId},
+            chg_dt = now()
+        WHERE bill_company_id = #{billCompanyId}
+          AND year = #{year}
+          AND month = #{month}
+    </update>
+</mapper>

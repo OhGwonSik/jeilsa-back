@@ -1,0 +1,413 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jeil.delivery.billing.mapper.BillTransportMapper">
+
+	<!-- 청구업체 / 청구 년도 / 청구 월 / 청구 일자 구분(20,30)별 운송정보(청구목록) 조회 -->
+	<sql id="selectTransportByMonthListForBillTransport">
+	    <![CDATA[
+		    WITH RECURSIVE period_params AS (
+		        SELECT
+		            TO_CHAR(CASE
+		                WHEN #{param.billCd} = '30' THEN DATE_TRUNC('month', MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1))::date
+		                WHEN #{param.billCd} = '20' THEN ((MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1) - INTERVAL '1 month') + INTERVAL '20 day')::date
+		            END, 'YYYY-MM-DD') AS start_dt,
+		            TO_CHAR(CASE
+		                WHEN #{param.billCd} = '30' THEN (DATE_TRUNC('month', MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1)) + INTERVAL '1 month')::date
+		                WHEN #{param.billCd} = '20' THEN (MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1) + INTERVAL '20 day')::date
+		            END, 'YYYY-MM-DD') AS end_dt
+		    ),
+		    ultimate_parent_map AS (
+		        SELECT company_id, excclc_company_id AS parent_id, excclc_company_id AS ultimate_id, 1 AS level
+		        FROM shipper WHERE del_yn = 'N' AND use_yn = 'Y'
+		        UNION ALL
+		        SELECT upm.company_id, s.excclc_company_id, s.excclc_company_id, upm.level + 1
+		        FROM ultimate_parent_map upm
+		        INNER JOIN shipper s ON upm.ultimate_id = s.company_id
+		        WHERE s.del_yn = 'N' AND s.use_yn = 'Y'
+		          AND upm.ultimate_id != s.excclc_company_id
+		          AND upm.level < 4
+		    ),
+		    final_parent_map AS MATERIALIZED (
+		        SELECT fpm.company_id, CAST(fpm.ultimate_id AS INTEGER) AS ultimate_id
+		        FROM (
+		            SELECT company_id, ultimate_id,
+		                   ROW_NUMBER() OVER(PARTITION BY company_id ORDER BY level DESC) AS rn
+		            FROM ultimate_parent_map
+		        ) fpm
+		        INNER JOIN shipper boss_sh ON boss_sh.company_id = fpm.ultimate_id
+		            AND boss_sh.bill_company_id = #{param.billCompanyId}
+		            AND boss_sh.bill_stdr_cd = #{param.billCd}
+		            AND boss_sh.del_yn = 'N'
+		            AND boss_sh.use_yn = 'Y'
+		        WHERE fpm.rn = 1
+		    ),
+		    transport_by_month AS (
+		        SELECT
+		            tr.transport_id, tr.sender_company_id, tr.sender_company_nm,
+		            tr.sender_transport_shipper_cd, tr.charge_cd, tr.sender_region_cd,
+		            tr.sender_region_dtl_cd, tr.sender_manager_nm, tr.sender_address,
+		            tr.sender_tel_no, tr.sender_manager_tel_no, tr.sender_rmk,
+		            tr.receiver_company_id, tr.receiver_company_nm, tr.receiver_transport_shipper_cd,
+		            tr.receiver_region_cd, tr.receiver_region_dtl_cd, tr.receiver_address,
+		            tr.receiver_tel_no, tr.receiver_manager_tel_no, tr.receiver_manager_nm,
+		            tr.receiver_rmk, tr.shipment_operation_date AS tr_shipment_operation_date,
+		            trd.transport_dtl_id, trd.calculation_cd, trd.calculation_target_cd,
+		            trd.sender_receiver_cd, trd.waybill_no, trd.kind_cd,
+		            trd.untpc, trd.qty, trd.amount, trd.rmk,
+		            trd.shipment_operation_date AS trd_shipment_operation_date,
+		            CAST(fpm.ultimate_id AS INTEGER) AS boss_id,
+		            1 AS bill_dtl_dgre
+		        FROM transport_dtl trd
+		        INNER JOIN period_params pp ON trd.shipment_operation_date >= pp.start_dt
+		                                   AND trd.shipment_operation_date < pp.end_dt
+		        INNER JOIN transport tr ON tr.transport_id = trd.transport_id
+		            AND tr.del_yn = 'N'
+		        INNER JOIN final_parent_map fpm ON fpm.company_id = (
+		            CASE
+		                WHEN trd.calculation_target_cd = 'SENDER' THEN tr.sender_company_id
+		                WHEN trd.calculation_target_cd = 'RECEIVER' THEN tr.receiver_company_id
+		            END
+		        )
+		        WHERE trd.del_yn = 'N'
+		          AND trd.calculation_target_cd IN ('SENDER', 'RECEIVER')
+		    )
+	    ]]>
+	</sql>
+
+	<!-- 청구업체 / 청구 년도 / 청구 월 / 청구 일자 구분(20,30)별 운송정보(청구목록) 조회 (del_yn여부 필요없이 전체 리스트) -->
+	<sql id="selectTransportByMonthListForBillTransportAll">
+	    <![CDATA[
+	    WITH RECURSIVE period_params AS (
+	        SELECT
+	            TO_CHAR(CASE
+	                WHEN #{param.billCd} = '30' THEN DATE_TRUNC('month', MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1))::date
+	                WHEN #{param.billCd} = '20' THEN ((MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1) - INTERVAL '1 month') + INTERVAL '20 day')::date
+	            END, 'YYYY-MM-DD') AS start_dt,
+	            TO_CHAR(CASE
+	                WHEN #{param.billCd} = '30' THEN (DATE_TRUNC('month', MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1)) + INTERVAL '1 month')::date
+	                WHEN #{param.billCd} = '20' THEN (MAKE_DATE(CAST(#{param.year} AS INTEGER), CAST(#{param.month} AS INTEGER), 1) + INTERVAL '20 day')::date
+	            END, 'YYYY-MM-DD') AS end_dt
+	    ),
+	    ultimate_parent_map AS (
+	        SELECT company_id, excclc_company_id AS parent_id, excclc_company_id AS ultimate_id, 1 AS level
+	        FROM shipper WHERE del_yn = 'N' AND use_yn = 'Y'
+	        UNION ALL
+	        SELECT upm.company_id, s.excclc_company_id, s.excclc_company_id, upm.level + 1
+	        FROM ultimate_parent_map upm
+	        INNER JOIN shipper s ON upm.ultimate_id = s.company_id
+	        WHERE s.del_yn = 'N' AND s.use_yn = 'Y'
+	          AND upm.ultimate_id != s.excclc_company_id
+	          AND upm.level < 4
+	    ),
+	    final_parent_map AS MATERIALIZED (
+	        SELECT fpm.company_id, CAST(fpm.ultimate_id AS INTEGER) AS ultimate_id
+	        FROM (
+	            SELECT company_id, ultimate_id,
+	                   ROW_NUMBER() OVER(PARTITION BY company_id ORDER BY level DESC) AS rn
+	            FROM ultimate_parent_map
+	        ) fpm
+	        INNER JOIN shipper boss_sh ON boss_sh.company_id = fpm.ultimate_id
+	            AND boss_sh.bill_company_id = #{param.billCompanyId}
+	            AND boss_sh.bill_stdr_cd = #{param.billCd}
+	            ]]>
+	            <if test="param.calculationCompanyId != null">
+	                AND boss_sh.company_id = #{param.calculationCompanyId}
+	            </if>
+	            <![CDATA[
+	            AND boss_sh.del_yn = 'N'
+	            AND boss_sh.use_yn = 'Y'
+	        WHERE fpm.rn = 1
+	    ),
+	    transport_by_month_all AS (
+	        SELECT
+	            tr.transport_id, tr.shipment_operation_date AS tr_shipment_operation_date,
+	            tr.sender_company_id, tr.sender_company_nm, tr.sender_transport_shipper_cd,
+	            tr.charge_cd, tr.sender_region_cd, tr.sender_region_dtl_cd, tr.sender_manager_nm,
+	            tr.sender_address, tr.sender_tel_no, tr.sender_manager_tel_no, tr.sender_rmk,
+	            tr.receiver_company_id, tr.receiver_company_nm, tr.receiver_transport_shipper_cd,
+	            tr.receiver_region_cd, tr.receiver_region_dtl_cd, tr.receiver_address, tr.receiver_tel_no,
+	            tr.receiver_manager_tel_no, tr.receiver_manager_nm, tr.receiver_rmk, tr.del_yn AS tr_del_yn,
+	            trd.transport_dtl_id, trd.calculation_cd, trd.calculation_target_cd, trd.sender_receiver_cd,
+	            trd.waybill_no, trd.kind_cd, trd.untpc, trd.qty, trd.amount, trd.rmk,
+	            trd.shipment_operation_date AS trd_shipment_operation_date, trd.del_yn AS trd_del_yn,
+	            fpm.ultimate_id AS boss_id
+	        FROM transport_dtl trd
+	        INNER JOIN period_params pp ON trd.shipment_operation_date >= pp.start_dt
+	                                   AND trd.shipment_operation_date < pp.end_dt
+	        INNER JOIN transport tr ON tr.transport_id = trd.transport_id AND tr.del_yn = 'N'
+	        INNER JOIN final_parent_map fpm ON fpm.company_id = (
+	            CASE
+	                WHEN trd.calculation_target_cd = 'SENDER' THEN tr.sender_company_id
+	                WHEN trd.calculation_target_cd = 'RECEIVER' THEN tr.receiver_company_id
+	            END
+	        )
+	        WHERE trd.del_yn = 'N'
+	          AND trd.calculation_target_cd IN ('SENDER', 'RECEIVER')
+	    )
+	    ]]>
+	</sql>
+
+	<!-- (정산그룹업체별 재계산 / bill_transport 보장 insert 재계산시 없던 데이터 삽입) -->
+	<insert id="insertBillTransportIfNotExists" parameterType="com.jeil.delivery.billing.domain.BillDTO">
+	    /* insertBillTransportIfNotExists */
+	    <include refid="selectTransportByMonthListForBillTransportAll"></include>
+		,
+	    /* 생성된 bill_dtl_id의 정보를 미리 조회 (반복 서브쿼리 제거) */
+	    target_bd AS (
+	        SELECT
+	            bill_dtl_id,
+	            bill_id,
+	            bill_dtl_dgre,
+	            calculation_company_id
+	        FROM bill_dtl
+	        WHERE bill_dtl_id = #{param.billDtlId}
+	          AND calculation_company_id = #{param.calculationCompanyId}
+	    )
+	    INSERT INTO bill_transport (
+	        transport_id, bill_dtl_id, bill_id, bill_dtl_dgre, calculation_company_id,
+	        shipment_operation_date, sender_company_id, sender_company_nm,
+	        sender_transport_shipper_cd, charge_cd, sender_region_cd, sender_region_dtl_cd,
+	        sender_manager_nm, sender_address, sender_tel_no, sender_manager_tel_no, sender_rmk,
+	        receiver_company_id, receiver_company_nm, receiver_transport_shipper_cd,
+	        receiver_region_cd, receiver_region_dtl_cd, receiver_address, receiver_tel_no,
+	        receiver_manager_tel_no, receiver_manager_nm, receiver_rmk,
+	        reg_id, reg_dt, chg_id, chg_dt, del_yn
+	    )
+	    SELECT DISTINCT ON (tbma.transport_id)
+	        tbma.transport_id,
+	        tbd.bill_dtl_id,
+	        tbd.bill_id,
+	        tbd.bill_dtl_dgre,
+	        tbd.calculation_company_id,
+	        tbma.tr_shipment_operation_date,
+	        tbma.sender_company_id, tbma.sender_company_nm,
+	        tbma.sender_transport_shipper_cd, tbma.charge_cd,
+	        tbma.sender_region_cd, tbma.sender_region_dtl_cd,
+	        tbma.sender_manager_nm, tbma.sender_address, tbma.sender_tel_no,
+	        tbma.sender_manager_tel_no, tbma.sender_rmk,
+	        tbma.receiver_company_id, tbma.receiver_company_nm,
+	        tbma.receiver_transport_shipper_cd, tbma.receiver_region_cd, tbma.receiver_region_dtl_cd,
+	        tbma.receiver_address, tbma.receiver_tel_no, tbma.receiver_manager_tel_no,
+	        tbma.receiver_manager_nm, tbma.receiver_rmk,
+	        #{memberInfo.memberId}, now(), #{memberInfo.memberId}, now(),
+	        tbma.tr_del_yn
+	    FROM transport_by_month_all tbma
+	    INNER JOIN target_bd tbd ON tbd.calculation_company_id = tbma.boss_id
+	</insert>
+
+	<!-- (전체 재계산 / bill_transport 보장 insert 재계산시 없던 데이터 삽입) -->
+	<insert id="insertBillTransportAllIfNotExists" parameterType="com.jeil.delivery.billing.domain.BillDTO">
+	    /* insertBillTransportAllIfNotExists */
+		<include refid="selectTransportByMonthListForBillTransportAll"></include>
+	    ,
+	    latest_bd_info AS (
+	        SELECT DISTINCT ON (calculation_company_id)
+	            bill_id, calculation_company_id, bill_dtl_id, bill_dtl_dgre
+	        FROM bill_dtl
+	        WHERE bill_id = #{param.billId} AND del_yn = 'N'
+	        ORDER BY calculation_company_id, bill_dtl_dgre DESC
+	    )
+	    INSERT INTO bill_transport (
+	        transport_id, bill_dtl_id, bill_id, bill_dtl_dgre, calculation_company_id,
+	        shipment_operation_date, sender_company_id, sender_company_nm,
+	        sender_transport_shipper_cd, charge_cd, sender_region_cd, sender_region_dtl_cd,
+	        sender_manager_nm, sender_address, sender_tel_no, sender_manager_tel_no, sender_rmk,
+	        receiver_company_id, receiver_company_nm, receiver_transport_shipper_cd,
+	        receiver_region_cd, receiver_region_dtl_cd, receiver_address, receiver_tel_no,
+	        receiver_manager_tel_no, receiver_manager_nm, receiver_rmk,
+	        reg_id, reg_dt, chg_id, chg_dt, del_yn
+	    )
+	    SELECT DISTINCT ON (tbma.transport_id, lb.bill_dtl_id)
+	        tbma.transport_id, lb.bill_dtl_id, lb.bill_id, lb.bill_dtl_dgre, lb.calculation_company_id,
+	        tbma.tr_shipment_operation_date, tbma.sender_company_id, tbma.sender_company_nm,
+	        tbma.sender_transport_shipper_cd, tbma.charge_cd, tbma.sender_region_cd, tbma.sender_region_dtl_cd,
+	        tbma.sender_manager_nm, tbma.sender_address, tbma.sender_tel_no, tbma.sender_manager_tel_no, tbma.sender_rmk,
+	        tbma.receiver_company_id, tbma.receiver_company_nm, tbma.receiver_transport_shipper_cd,
+	        tbma.receiver_region_cd, tbma.receiver_region_dtl_cd, tbma.receiver_address, tbma.receiver_tel_no,
+	        tbma.receiver_manager_tel_no, tbma.receiver_manager_nm, tbma.receiver_rmk,
+	        #{memberInfo.memberId}, now(), #{memberInfo.memberId}, now(), tbma.tr_del_yn
+	    FROM transport_by_month_all tbma
+	    INNER JOIN latest_bd_info lb ON lb.calculation_company_id = tbma.boss_id
+	    ON CONFLICT (transport_id, bill_dtl_id, bill_id, bill_dtl_dgre, calculation_company_id)
+	    DO UPDATE SET
+	        shipment_operation_date = EXCLUDED.shipment_operation_date,
+	        sender_company_id = EXCLUDED.sender_company_id,
+	        sender_company_nm = EXCLUDED.sender_company_nm,
+	        sender_transport_shipper_cd = EXCLUDED.sender_transport_shipper_cd,
+	        charge_cd = EXCLUDED.charge_cd,
+	        sender_region_cd = EXCLUDED.sender_region_cd,
+	        sender_region_dtl_cd = EXCLUDED.sender_region_dtl_cd,
+	        sender_manager_nm = EXCLUDED.sender_manager_nm,
+	        sender_address = EXCLUDED.sender_address,
+	        sender_tel_no = EXCLUDED.sender_tel_no,
+	        sender_manager_tel_no = EXCLUDED.sender_manager_tel_no,
+	        sender_rmk = EXCLUDED.sender_rmk,
+	        receiver_company_id = EXCLUDED.receiver_company_id,
+	        receiver_company_nm = EXCLUDED.receiver_company_nm,
+	        receiver_transport_shipper_cd = EXCLUDED.receiver_transport_shipper_cd,
+	        receiver_region_cd = EXCLUDED.receiver_region_cd,
+	        receiver_region_dtl_cd = EXCLUDED.receiver_region_dtl_cd,
+	        receiver_address = EXCLUDED.receiver_address,
+	        receiver_tel_no = EXCLUDED.receiver_tel_no,
+	        receiver_manager_tel_no = EXCLUDED.receiver_manager_tel_no,
+	        receiver_manager_nm = EXCLUDED.receiver_manager_nm,
+	        receiver_rmk = EXCLUDED.receiver_rmk,
+	        chg_id = #{memberInfo.memberId}, chg_dt = now(), del_yn = EXCLUDED.del_yn
+	</insert>
+
+	<!-- transport_by_month 별 청구_운송 데이터 추출하여 INSERT -->
+	<insert id="insertBillTransportFromTransport" parameterType="com.jeil.delivery.billing.domain.BillVO">
+		/* insertBillTransportFromTransport */
+		<include refid="selectTransportByMonthListForBillTransport"/>
+	    ,
+	    target_bill_dtl AS (
+	        SELECT bill_dtl_id, bill_dtl_dgre, calculation_company_id
+	        FROM bill_dtl
+	        WHERE bill_id = #{param.billId}
+	          AND del_yn = 'N'
+	    )
+	    INSERT INTO bill_transport (
+	        transport_id,
+	        bill_id, bill_dtl_id, bill_dtl_dgre, calculation_company_id,
+	        shipment_operation_date,
+	        sender_company_id, sender_company_nm, sender_transport_shipper_cd,
+	        charge_cd, sender_region_cd, sender_region_dtl_cd,
+	        sender_manager_nm, sender_address, sender_tel_no, sender_manager_tel_no,
+	        sender_rmk,
+	        receiver_company_id, receiver_company_nm, receiver_transport_shipper_cd,
+	        receiver_region_cd, receiver_region_dtl_cd,
+	        receiver_address, receiver_tel_no, receiver_manager_tel_no, receiver_manager_nm,
+	        receiver_rmk,
+	        reg_id, chg_id, del_yn
+	    )
+	    SELECT DISTINCT ON (tbm.transport_id, bdtl.calculation_company_id)
+	        tbm.transport_id,
+	        #{param.billId}, bdtl.bill_dtl_id, tbm.bill_dtl_dgre, bdtl.calculation_company_id,
+	        tbm.tr_shipment_operation_date,
+	        tbm.sender_company_id, tbm.sender_company_nm, tbm.sender_transport_shipper_cd,
+	        tbm.charge_cd, tbm.sender_region_cd, tbm.sender_region_dtl_cd,
+	        tbm.sender_manager_nm, tbm.sender_address, tbm.sender_tel_no, tbm.sender_manager_tel_no,
+	        tbm.sender_rmk,
+	        tbm.receiver_company_id, tbm.receiver_company_nm, tbm.receiver_transport_shipper_cd,
+	        tbm.receiver_region_cd, tbm.receiver_region_dtl_cd,
+	        tbm.receiver_address, tbm.receiver_tel_no, tbm.receiver_manager_tel_no, tbm.receiver_manager_nm,
+	        tbm.receiver_rmk,
+	        #{memberInfo.memberId}, #{memberInfo.memberId}, 'N'
+	    FROM transport_by_month tbm
+	    INNER JOIN target_bill_dtl bdtl ON
+	        bdtl.bill_dtl_dgre = tbm.bill_dtl_dgre
+	        AND bdtl.calculation_company_id = tbm.boss_id
+	</insert>
+
+	<!-- transport_by_month 별 청구_운송_상세 데이터 추출하여 INSERT -->
+	<insert id="insertBillTransportDtlFromTransport" parameterType="com.jeil.delivery.billing.domain.BillVO" >
+		/* insertBillTransportDtlFromTransport */
+		<include refid="selectTransportByMonthListForBillTransport"/>
+	    ,
+	    target_bill_dtl AS (
+	        SELECT bill_dtl_id, bill_dtl_dgre, calculation_company_id
+	        FROM bill_dtl
+	        WHERE bill_id = #{param.billId}
+	          AND del_yn = 'N'
+	    )
+	    INSERT INTO bill_transport_dtl (
+	        transport_id, transport_dtl_id,
+	        bill_dtl_id, bill_id, bill_dtl_dgre,
+	        calculation_company_id,
+	        calculation_cd, sender_receiver_cd, waybill_no, kind_cd,
+	        untpc, qty, amount, rmk, shipment_operation_date, calculation_target_cd,
+	        reg_id, chg_id, del_yn
+	    )
+	    SELECT
+	        tbm.transport_id, tbm.transport_dtl_id,
+	        bdtl.bill_dtl_id, #{param.billId}, tbm.bill_dtl_dgre,
+	        bdtl.calculation_company_id,
+	        tbm.calculation_cd, tbm.sender_receiver_cd, tbm.waybill_no, tbm.kind_cd,
+	        tbm.untpc, tbm.qty, tbm.amount, tbm.rmk, tbm.trd_shipment_operation_date, tbm.calculation_target_cd,
+	        #{memberInfo.memberId}, #{memberInfo.memberId}, 'N'
+	    FROM transport_by_month tbm
+	    INNER JOIN target_bill_dtl bdtl ON
+	        bdtl.bill_dtl_dgre = tbm.bill_dtl_dgre
+	        AND bdtl.calculation_company_id = tbm.boss_id
+	</insert>
+
+	<!-- (정산그룹업체별 재계산 / transport 내역 기반으로 insert) -->
+	<insert id="insertBillTransportDtlReCalculation" parameterType="com.jeil.delivery.billing.domain.BillDTO">
+		/* insertBillTransportDtlReCalculation  */
+		<include refid="selectTransportByMonthListForBillTransportAll"/>
+		,
+	    /* 생성된 bill_dtl 정보를 미리 확보 (반복적인 dgre 조회 서브쿼리 제거) */
+	    target_bd AS (
+	        SELECT
+	            bill_dtl_id,
+	            bill_id,
+	            bill_dtl_dgre,
+	            calculation_company_id
+	        FROM bill_dtl
+	        WHERE bill_dtl_id = #{param.billDtlId}
+	          AND calculation_company_id = #{param.calculationCompanyId}
+	    )
+	    INSERT INTO bill_transport_dtl (
+	        transport_id, transport_dtl_id, bill_dtl_id, bill_id,
+	        bill_dtl_dgre, calculation_company_id,
+	        calculation_cd, sender_receiver_cd, waybill_no, kind_cd,
+	        untpc, qty, amount, rmk, shipment_operation_date, calculation_target_cd,
+	        reg_id, chg_id, del_yn
+	    )
+	    SELECT
+	        tbma.transport_id, tbma.transport_dtl_id,
+	        tbd.bill_dtl_id, tbd.bill_id,
+	        tbd.bill_dtl_dgre,
+	        tbd.calculation_company_id,
+	        tbma.calculation_cd, tbma.sender_receiver_cd, tbma.waybill_no, tbma.kind_cd,
+	        tbma.untpc, tbma.qty, tbma.amount, tbma.rmk, tbma.trd_shipment_operation_date, tbma.calculation_target_cd,
+	        #{memberInfo.memberId}, #{memberInfo.memberId},
+	        tbma.trd_del_yn
+	    FROM transport_by_month_all tbma
+	    INNER JOIN target_bd tbd ON tbd.calculation_company_id = tbma.boss_id
+	</insert>
+
+	<!-- (전체 재계산 / transport 내역 기반으로 insert) -->
+	<insert id="insertBillTransportDtlReCalculationAll" parameterType="com.jeil.delivery.billing.domain.BillDTO">
+	    /* insertBillTransportDtlReCalculationAll */
+	    <include refid="selectTransportByMonthListForBillTransportAll"/>
+		,
+	    latest_bd_info AS (
+	        SELECT DISTINCT ON (calculation_company_id)
+	            bill_id, calculation_company_id, bill_dtl_id, bill_dtl_dgre
+	        FROM bill_dtl
+	        WHERE bill_id = #{param.billId} AND del_yn = 'N'
+	        ORDER BY calculation_company_id, bill_dtl_dgre DESC
+	    )
+	    INSERT INTO bill_transport_dtl (
+	        transport_id, transport_dtl_id, bill_dtl_id, bill_id, bill_dtl_dgre,
+	        calculation_company_id, calculation_cd, sender_receiver_cd, waybill_no, kind_cd,
+	        untpc, qty, amount, rmk, shipment_operation_date, calculation_target_cd,
+	        reg_id, chg_id, del_yn
+	    )
+	    SELECT
+	        tbma.transport_id, tbma.transport_dtl_id,
+	        lb.bill_dtl_id, lb.bill_id, lb.bill_dtl_dgre,
+	        lb.calculation_company_id,
+	        tbma.calculation_cd, tbma.sender_receiver_cd, tbma.waybill_no, tbma.kind_cd,
+	        tbma.untpc, tbma.qty, tbma.amount, tbma.rmk, tbma.trd_shipment_operation_date, tbma.calculation_target_cd,
+	        #{memberInfo.memberId}, #{memberInfo.memberId}, tbma.trd_del_yn
+	    FROM transport_by_month_all tbma
+	    INNER JOIN latest_bd_info lb ON lb.calculation_company_id = tbma.boss_id
+	    ON CONFLICT (transport_id, transport_dtl_id, bill_dtl_id, bill_id, bill_dtl_dgre)
+	    DO UPDATE SET
+	        calculation_company_id = EXCLUDED.calculation_company_id,
+	        calculation_cd = EXCLUDED.calculation_cd,
+	        sender_receiver_cd = EXCLUDED.sender_receiver_cd,
+	        waybill_no = EXCLUDED.waybill_no,
+	        kind_cd = EXCLUDED.kind_cd,
+	        untpc = EXCLUDED.untpc,
+	        qty = EXCLUDED.qty,
+	        amount = EXCLUDED.amount,
+	        rmk = EXCLUDED.rmk,
+	        shipment_operation_date = EXCLUDED.shipment_operation_date,
+	        calculation_target_cd = EXCLUDED.calculation_target_cd,
+	        chg_id = #{memberInfo.memberId}, chg_dt = now(), del_yn = EXCLUDED.del_yn
+	</insert>
+</mapper>

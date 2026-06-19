@@ -1,0 +1,1269 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jeil.delivery.deliverylogic.mapper.TransportMapper">
+    <select id="selectArrivalsList"
+            resultType="com.jeil.delivery.deliverylogic.domain.TransportVO"
+            parameterType="map">
+
+        WITH
+        code_charge AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'CHARGE' AND del_yn = 'N'
+        ),
+        code_region AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_TYPE' AND del_yn = 'N'
+        ),
+        code_region_dtl AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_DTL_TYPE' AND del_yn = 'N'
+        ),
+        code_shipper AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'SHIPPER_TYPE' AND del_yn = 'N'
+        ),
+        code_kind AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'KIND_TYPE' AND del_yn = 'N'
+        )
+
+        SELECT
+        /* transport 헤더 */
+        t.transport_id,
+        t.charge_cd,
+        t.del_yn,
+        t.reg_id,
+        t.reg_dt,
+        t.chg_id,
+        t.chg_dt,
+
+        /* Sender */
+        t.sender_company_id,
+        COALESCE(t.sender_company_nm, sc.company_nm) AS sender_company_nm,
+        t.sender_region_cd,
+        c_sregion.code_nm         AS sender_region_nm,
+        t.sender_region_dtl_cd,
+        c_sregion_dtl.code_nm     AS sender_region_dtl_nm,
+        --dr.delivery_route_nm      AS sender_delivery_route_nm,
+        t.sender_address,
+        t.sender_tel_no,
+        t.sender_manager_tel_no,
+        t.sender_manager_nm,
+        t.sender_rmk,
+        s.shipment_operation_date,
+
+        /* sender_shipper_cd */
+        (CASE WHEN sc.shipper_yn = 'Y' THEN ssp.shipper_cd ELSE 'DLV' END) AS sender_transport_shipper_cd,
+        c_sender_shipper.code_nm AS sender_transport_shipper_nm,
+
+        /* Receiver */
+        t.receiver_company_id,
+        COALESCE(t.receiver_company_nm, rc.company_nm) AS receiver_company_nm,
+        t.receiver_region_cd,
+        c_rregion.code_nm         AS receiver_region_nm,
+        t.receiver_region_dtl_cd,
+        c_rregion_dtl.code_nm     AS receiver_region_dtl_nm,
+        dr.delivery_route_nm      AS receiver_delivery_route_nm,
+        t.receiver_address,
+        t.receiver_tel_no,
+        t.receiver_manager_tel_no,
+        t.receiver_manager_nm,
+        t.receiver_rmk,
+
+        /* receiver_shipper_cd */
+        (CASE WHEN rc.shipper_yn = 'Y' THEN rsp.shipper_cd ELSE 'DLV' END) AS receiver_transport_shipper_cd,
+        c_receiver_shipper.code_nm AS receiver_transport_shipper_nm,
+
+        /* 코드명 */
+        c_charge.code_nm AS charge_nm,
+
+        /* 상세 */
+        s.calculation_cd,
+        s.transport_dtl_id,
+        s.kind_cd,
+        c_kind.code_nm AS kind_cd_nm,
+        s.untpc,
+        s.waybill_no,
+        s.qty,
+        s.amount
+
+        FROM transport_dtl s
+        LEFT JOIN transport t
+        ON s.transport_id = t.transport_id
+        AND s.del_yn = 'N'
+
+        LEFT JOIN company sc ON t.sender_company_id = sc.company_id AND sc.del_yn = 'N'
+        LEFT JOIN company rc ON t.receiver_company_id = rc.company_id AND rc.del_yn = 'N'
+        LEFT JOIN shipper ssp ON t.sender_company_id = ssp.company_id AND ssp.del_yn = 'N'
+        LEFT JOIN shipper rsp ON t.receiver_company_id = rsp.company_id AND rsp.del_yn = 'N'
+
+        LEFT JOIN company_delivery_route cdr
+        ON cdr.company_id = rc.company_id AND cdr.del_yn = 'N'
+        LEFT JOIN delivery_route dr
+        ON dr.delivery_route_id = cdr.delivery_route_id AND dr.del_yn = 'N'
+
+        /* 코드 조인 */
+        LEFT JOIN code_charge     c_charge      ON c_charge.code_val      = t.charge_cd
+        LEFT JOIN code_region     c_sregion     ON c_sregion.code_val     = t.sender_region_cd
+        LEFT JOIN code_region_dtl c_sregion_dtl ON c_sregion_dtl.code_val = t.sender_region_dtl_cd
+        LEFT JOIN code_region     c_rregion     ON c_rregion.code_val     = t.receiver_region_cd
+        LEFT JOIN code_region_dtl c_rregion_dtl ON c_rregion_dtl.code_val = t.receiver_region_dtl_cd
+
+        /* shipper_nm 매핑 ('DLV' 포함) */
+        LEFT JOIN code_shipper c_sender_shipper
+        ON c_sender_shipper.code_val = (CASE WHEN sc.shipper_yn = 'Y' THEN ssp.shipper_cd ELSE 'DLV' END)
+        LEFT JOIN code_shipper c_receiver_shipper
+        ON c_receiver_shipper.code_val = (CASE WHEN rc.shipper_yn = 'Y' THEN rsp.shipper_cd ELSE 'DLV' END)
+
+        LEFT JOIN code_kind c_kind ON c_kind.code_val = s.kind_cd
+
+        <where>
+            AND t.del_yn = 'N'
+
+            <!-- 발신/수신 구분 (배송체크에서만 사용)-->
+            <if test="senderReceiverCd == 'CHECK'">
+                AND (
+                t.charge_cd &lt;&gt; 'CH003'
+                OR s.sender_receiver_cd = 'SENDER'
+                )
+            </if>
+            <!-- 발신/수신 구분 -->
+            <if test="senderReceiverCd != null
+           and senderReceiverCd != ''
+           and senderReceiverCd != 'CHECK'">
+                AND s.sender_receiver_cd = #{senderReceiverCd}
+            </if>
+
+            <!-- 기간: t.shipment_operation_date, 끝일+1일 미만 -->
+			<choose>
+			    <when test="startDate != null and startDate != ''">
+			        <![CDATA[
+			        AND s.shipment_operation_date >= #{startDate}
+			        ]]>
+			    </when>
+			    <otherwise>
+			        <![CDATA[
+			        AND s.shipment_operation_date >= to_char(CURRENT_DATE - INTERVAL '1 day', 'YYYY-MM-DD')
+			        ]]>
+			    </otherwise>
+			</choose>
+
+			<choose>
+			    <when test="endDate != null and endDate != ''">
+			        <![CDATA[
+			        AND s.shipment_operation_date < to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+			        ]]>
+			    </when>
+			    <otherwise>
+			        <![CDATA[
+			        AND s.shipment_operation_date < to_char(CURRENT_DATE + INTERVAL '2 day', 'YYYY-MM-DD')
+			        ]]>
+			    </otherwise>
+			</choose>
+
+            <!-- 배송경로 필터 -->
+            <if test="deliveryRouteId != null and deliveryRouteId != 0">
+                AND dr.delivery_route_id = #{deliveryRouteId}
+            </if>
+
+            <!-- 🔍 발신처: 업체명 OR (전화번호 뒤 4자리, 4자리 입력이 전제) -->
+            <if test="senderCompanyNm != null and senderCompanyNm != ''">
+                AND (
+                COALESCE(t.sender_company_nm, sc.company_nm) ILIKE CONCAT('%', #{senderCompanyNm}, '%')
+                OR (
+                LENGTH(regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')) = 4
+                AND (
+                RIGHT(regexp_replace(COALESCE(t.sender_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')
+                OR
+                RIGHT(regexp_replace(COALESCE(t.sender_manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')
+                )
+                )
+                )
+            </if>
+
+            <!-- 🔍 수신처: 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+            <if test="receiverCompanyNm != null and receiverCompanyNm != ''">
+                AND (
+                COALESCE(t.receiver_company_nm, rc.company_nm) ILIKE CONCAT('%', #{receiverCompanyNm}, '%')
+                OR (
+                LENGTH(regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')) = 4
+                AND (
+                RIGHT(regexp_replace(COALESCE(t.receiver_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')
+                OR
+                RIGHT(regexp_replace(COALESCE(t.receiver_manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')
+                )
+                )
+                )
+            </if>
+
+            <if test="chargeCd  != null and chargeCd != ''">
+                AND t.charge_cd = #{chargeCd}
+            </if>
+            <if test="senderRegionCd  != null and senderRegionCd != ''">
+                AND t.sender_region_cd = #{senderRegionCd}
+            </if>
+            <if test="receiverRegionCd  != null and receiverRegionCd != ''">
+                AND t.receiver_region_cd = #{receiverRegionCd}
+            </if>
+            <if test="waybillNo != null and waybillNo != ''">
+                AND s.waybill_no LIKE CONCAT('%', #{waybillNo}, '%')
+            </if>
+            <if test="calculationCd  != null and calculationCd != ''">
+                AND s.calculation_cd = #{calculationCd}
+            </if>
+        </where>
+
+        ORDER BY
+        t.shipment_operation_date DESC,
+        t.receiver_company_id ASC,
+        t.reg_dt DESC,
+        t.transport_id DESC;
+
+    </select>
+
+
+    <select id="selectTransportList"
+            resultType="com.jeil.delivery.deliverylogic.domain.TransportVO"
+            parameterType="map">
+
+        WITH
+        /* 코드 CTE */
+        code_charge AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'CHARGE' AND del_yn = 'N'
+        ),
+        code_region AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_TYPE' AND del_yn = 'N'
+        ),
+        code_region_dtl AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_DTL_TYPE' AND del_yn = 'N'
+        ),
+        code_shipper AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'SHIPPER_TYPE' AND del_yn = 'N'
+        ),
+
+        /* transport_dtl 집계 (transport 기준) */
+        dtl_agg AS (
+        SELECT
+        td.transport_id,
+        SUM(td.amount) FILTER (WHERE td.sender_receiver_cd = 'SENDER')   AS sum_sender_amount,
+        SUM(td.amount) FILTER (WHERE td.sender_receiver_cd = 'RECEIVER') AS sum_receiver_amount,
+        COUNT(*)      FILTER (WHERE td.sender_receiver_cd = 'SENDER')    AS cnt_sender,
+        COUNT(*)      FILTER (WHERE td.sender_receiver_cd = 'RECEIVER')  AS cnt_receiver
+        FROM transport_dtl td
+        WHERE td.del_yn = 'N'
+        <if test="startDate != null and startDate != ''">
+            <![CDATA[
+        AND td.shipment_operation_date >= #{startDate}
+      ]]>
+        </if>
+        <if test="endDate != null and endDate != ''">
+            <![CDATA[
+        AND td.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+      ]]>
+        </if>
+        GROUP BY td.transport_id
+        )
+
+	    SELECT
+	    /* transport 헤더 */
+	    t.transport_id,
+	    t.charge_cd,
+	    t.shipment_operation_date,
+	    t.del_yn,
+	    t.reg_id,
+	    t.reg_dt,
+	    t.chg_id,
+	    t.chg_dt,
+
+        /* Sender */
+        t.sender_company_id,
+        COALESCE(t.sender_company_nm, sc.company_nm) AS sender_company_nm,
+        t.sender_region_cd,
+        c_sregion.code_nm         AS sender_region_nm,
+        t.sender_region_dtl_cd,
+        c_sregion_dtl.code_nm     AS sender_region_dtl_nm,
+        dr.delivery_route_nm      AS sender_delivery_route_nm,
+        t.sender_address,
+        t.sender_tel_no,
+        t.sender_manager_tel_no,
+        t.sender_manager_nm,
+        t.sender_rmk,
+
+        /* sender_shipper_cd */
+        (CASE WHEN sc.shipper_yn = 'Y' THEN ssp.shipper_cd ELSE 'DLV' END) AS sender_transport_shipper_cd,
+        c_sender_shipper.code_nm AS sender_transport_shipper_nm,
+
+        /* Receiver */
+        t.receiver_company_id,
+        COALESCE(t.receiver_company_nm, rc.company_nm) AS receiver_company_nm,
+        t.receiver_region_cd,
+        c_rregion.code_nm         AS receiver_region_nm,
+        t.receiver_region_dtl_cd,
+        c_rregion_dtl.code_nm     AS receiver_region_dtl_nm,
+        t.receiver_address,
+        t.receiver_tel_no,
+        t.receiver_manager_tel_no,
+        t.receiver_manager_nm,
+        t.receiver_rmk,
+
+        (CASE WHEN rc.shipper_yn = 'Y' THEN rsp.shipper_cd ELSE 'DLV' END) AS receiver_transport_shipper_cd,
+        c_receiver_shipper.code_nm AS receiver_transport_shipper_nm,
+
+        /* 코드명 */
+        c_charge.code_nm AS charge_nm,
+
+        /* 합계 */
+        COALESCE(da.sum_sender_amount,   0) AS total_sender_amount,
+        COALESCE(da.sum_receiver_amount, 0) AS total_receiver_amount,
+        CASE
+        WHEN da.cnt_sender  > 0 THEN COALESCE(da.sum_sender_amount,   0)
+        WHEN da.cnt_receiver > 0 THEN COALESCE(da.sum_receiver_amount, 0)
+        ELSE 0
+        END AS total_amount
+
+        FROM transport t
+
+        /* 집계 조인 */
+        LEFT JOIN dtl_agg da ON da.transport_id = t.transport_id
+
+        /* 회사/shipper */
+        LEFT JOIN company sc ON t.sender_company_id = sc.company_id AND sc.del_yn = 'N'
+        LEFT JOIN company rc ON t.receiver_company_id = rc.company_id AND rc.del_yn = 'N'
+        LEFT JOIN shipper ssp ON sc.company_id = ssp.company_id AND ssp.del_yn = 'N'
+        LEFT JOIN shipper rsp ON rc.company_id = rsp.company_id AND rsp.del_yn = 'N'
+
+        /* 배송경로 */
+        LEFT JOIN company_delivery_route cdr
+        ON cdr.company_id = sc.company_id AND cdr.del_yn = 'N'
+        LEFT JOIN delivery_route dr
+        ON dr.delivery_route_id = cdr.delivery_route_id AND dr.del_yn = 'N'
+
+        /* 코드 조인 */
+        LEFT JOIN code_charge     c_charge      ON c_charge.code_val      = t.charge_cd
+        LEFT JOIN code_region     c_sregion     ON c_sregion.code_val     = t.sender_region_cd
+        LEFT JOIN code_region_dtl c_sregion_dtl ON c_sregion_dtl.code_val = t.sender_region_dtl_cd
+        LEFT JOIN code_region     c_rregion     ON c_rregion.code_val     = t.receiver_region_cd
+        LEFT JOIN code_region_dtl c_rregion_dtl ON c_rregion_dtl.code_val = t.receiver_region_dtl_cd
+
+        /* shipper_nm 매핑 ('DLV' 포함) */
+        LEFT JOIN code_shipper c_sender_shipper
+        ON c_sender_shipper.code_val = (CASE WHEN sc.shipper_yn = 'Y' THEN ssp.shipper_cd ELSE 'DLV' END)
+        LEFT JOIN code_shipper c_receiver_shipper
+        ON c_receiver_shipper.code_val = (CASE WHEN rc.shipper_yn = 'Y' THEN rsp.shipper_cd ELSE 'DLV' END)
+
+        WHERE t.del_yn = 'N'
+        <if test="startDate != null and startDate != ''">
+            <![CDATA[
+      AND t.shipment_operation_date >= #{startDate}
+    ]]>
+        </if>
+        <if test="endDate != null and endDate != ''">
+            <![CDATA[
+      AND t.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+    ]]>
+        </if>
+        <!-- 배송경로 필터 (있으면) -->
+        <if test="deliveryRouteId != null and deliveryRouteId != 0">
+            AND dr.delivery_route_id = #{deliveryRouteId}
+        </if>
+
+        <!-- 🔍 발신처: 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+        <if test="senderCompanyNm != null and senderCompanyNm != ''">
+            AND (
+            COALESCE(t.sender_company_nm, sc.company_nm) ILIKE CONCAT('%', #{senderCompanyNm}, '%')
+            OR (
+            LENGTH(regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')) = 4
+            AND (
+            RIGHT(regexp_replace(COALESCE(t.sender_tel_no, ''), '[^0-9]', '', 'g'), 4)
+            = regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')
+            OR
+            RIGHT(regexp_replace(COALESCE(t.sender_manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+            = regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')
+            )
+            )
+            )
+        </if>
+
+        <!-- 🔍 수신처: 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+        <if test="receiverCompanyNm != null and receiverCompanyNm != ''">
+            AND (
+            COALESCE(t.receiver_company_nm, rc.company_nm) ILIKE CONCAT('%', #{receiverCompanyNm}, '%')
+            OR (
+            LENGTH(regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')) = 4
+            AND (
+            RIGHT(regexp_replace(COALESCE(t.receiver_tel_no, ''), '[^0-9]', '', 'g'), 4)
+            = regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')
+            OR
+            RIGHT(regexp_replace(COALESCE(t.receiver_manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+            = regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')
+            )
+            )
+            )
+        </if>
+        ORDER BY
+        t.shipment_operation_date DESC,
+        t.sender_company_id ASC,
+        t.reg_dt DESC,
+        t.transport_id DESC;
+    </select>
+
+
+    <insert id="insertTransport"
+            parameterType="com.jeil.delivery.deliverylogic.domain.TransportVO"
+            useGeneratedKeys="true"
+            keyProperty="transportId"
+            keyColumn="transport_id">
+        INSERT INTO transport (
+            charge_cd,
+            sender_company_id,
+            sender_company_nm,
+            sender_transport_shipper_cd,
+            sender_region_cd,
+            sender_region_dtl_cd,
+            sender_manager_nm,
+            sender_address,
+            sender_tel_no,
+            sender_manager_tel_no,
+            sender_rmk,
+            receiver_company_id,
+            receiver_company_nm,
+            receiver_transport_shipper_cd,
+            receiver_region_cd,
+            receiver_region_dtl_cd,
+            receiver_address,
+            receiver_tel_no,
+            receiver_manager_tel_no,
+            receiver_manager_nm,
+            receiver_rmk,
+            reg_id,
+            reg_dt,
+            shipment_operation_date,
+            chg_id,
+            chg_dt,
+            del_yn
+        ) VALUES (
+                     #{chargeCd},
+                     #{senderCompanyId},
+                     #{senderCompanyNm},
+                     #{senderTransportShipperCd},
+                     #{senderRegionCd},
+                     #{senderRegionDtlCd},
+                     #{senderManagerNm},
+                     #{senderAddress},
+                     #{senderTelNo},
+                     #{senderManagerTelNo},
+                     #{senderRmk},
+                     #{receiverCompanyId},
+                     #{receiverCompanyNm},
+                     #{receiverTransportShipperCd},
+                     #{receiverRegionCd},
+                     #{receiverRegionDtlCd},
+                     #{receiverAddress},
+                     #{receiverTelNo},
+                     #{receiverManagerTelNo},
+                     #{receiverManagerNm},
+                     #{receiverRmk},
+                     #{regId},
+                     NOW(),
+                     #{shipmentOperationDate},
+                     #{chgId},
+                     NOW(),
+                     'N'
+                 )
+            RETURNING transport_id
+    </insert>
+
+    <update id="updateTransport"
+            parameterType="com.jeil.delivery.deliverylogic.domain.TransportVO">
+        UPDATE transport
+        SET
+            sender_company_id             = #{senderCompanyId},
+            sender_company_nm = #{senderCompanyNm},
+            receiver_company_id           = #{receiverCompanyId},
+            receiver_company_nm = #{receiverCompanyNm},
+            sender_transport_shipper_cd   = #{senderTransportShipperCd},
+            receiver_transport_shipper_cd = #{receiverTransportShipperCd},
+            charge_cd                     = #{chargeCd},
+            sender_region_cd              = #{senderRegionCd},
+            sender_region_dtl_cd          = #{senderRegionDtlCd},
+            sender_manager_nm             = #{senderManagerNm},
+            sender_address                = #{senderAddress},
+            sender_tel_no                 = #{senderTelNo},
+            sender_manager_tel_no         = #{senderManagerTelNo},
+            sender_rmk                    = #{senderRmk},
+            receiver_region_cd            = #{receiverRegionCd},
+            receiver_region_dtl_cd        = #{receiverRegionDtlCd},
+            receiver_manager_nm           = #{receiverManagerNm},
+            receiver_address              = #{receiverAddress},
+            receiver_tel_no               = #{receiverTelNo},
+            receiver_manager_tel_no       = #{receiverManagerTelNo},
+            receiver_rmk                  = #{receiverRmk},
+            chg_id                        = #{chgId},
+            chg_dt                        = NOW()
+        WHERE transport_id = #{transportId}
+    </update>
+
+    <select id="selectReceiverTransportList" resultType="com.jeil.delivery.deliverylogic.domain.TransportVO">
+        WITH
+        /* 코드 CTE */
+        code_region AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_TYPE' AND del_yn = 'N'
+        ),
+        code_region_dtl AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_DTL_TYPE' AND del_yn = 'N'
+        ),
+        code_shipper AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'SHIPPER_TYPE' AND del_yn = 'N'
+        ),
+        dtl_agg AS (
+        SELECT
+        td.transport_id,                                   -- 그룹 키
+        -- 금액 합계 (매칭 행이 없으면 NULL)
+        SUM(td.amount) FILTER (WHERE td.sender_receiver_cd = 'SENDER')   AS sum_sender_amount,
+        SUM(td.amount) FILTER (WHERE td.sender_receiver_cd = 'RECEIVER') AS sum_receiver_amount,
+
+        -- 존재 여부 판단용 카운트
+        COUNT(*) FILTER (WHERE td.sender_receiver_cd = 'SENDER')         AS cnt_sender,
+        COUNT(*) FILTER (WHERE td.sender_receiver_cd = 'RECEIVER')       AS cnt_receiver
+        FROM transport_dtl td
+        WHERE td.del_yn = 'N'
+        <if test="startDate != null and startDate != ''">
+            <![CDATA[
+        AND td.shipment_operation_date >= #{startDate}
+      ]]>
+        </if>
+        <if test="endDate != null and endDate != ''">
+        <![CDATA[
+        AND td.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+      ]]>
+      </if>
+        <if test="shipmentOperationDate != null and shipmentOperationDate != ''">
+            AND td.shipment_operation_date = #{shipmentOperationDate}
+        </if>
+        GROUP BY td.transport_id
+        )
+
+        SELECT
+        /* ===== 공통(트랜스포트 메타) ===== */
+        t.transport_id,
+        t.shipment_operation_date,
+        t.reg_id, t.reg_dt, t.chg_id, t.chg_dt, t.del_yn,
+
+        /* ====== RECEIVER(수신처) 영역 ====== */
+        t.receiver_company_id,
+        t.receiver_company_nm,
+        t.receiver_transport_shipper_cd,
+        c_receiver_shipper.code_nm                               AS receiver_transport_shipper_nm,
+
+        t.receiver_region_cd                                              AS receiver_region_cd,        -- 회사 테이블의 코드값
+        c_rregion.code_nm                                        AS receiver_region_nm,        -- 코드명 (t.receiver_region_cd 기준)
+        t.receiver_region_dtl_cd                                          AS receiver_region_dtl_cd,
+        c_rregion_dtl.code_nm                                    AS receiver_region_dtl_nm,
+
+        t.receiver_address,
+        t.receiver_tel_no,
+        t.receiver_manager_tel_no,
+        t.receiver_manager_nm,
+        t.receiver_rmk,
+
+        s.bill_stdr_cd,                                          -- (수신 회사의 구독/정산 기준)
+        ss.bill_stdr_cd,                                          -- (발신 회사의 구독/정산 기준)
+        s.untpc AS untpc,
+        s.weight_untpc AS weight_untpc,
+        ss.untpc AS sender_untpc,
+        ss.weight_untpc AS sender_weight_untpc,
+
+        /* ====== SENDER(발신처) 영역 추가 ====== */
+        t.sender_company_id,
+        t.sender_company_nm,
+        t.sender_transport_shipper_cd,
+        c_sender_shipper.code_nm                                 AS sender_transport_shipper_nm,
+
+        t.sender_region_cd                                             AS sender_region_cd,
+        c_sregion.code_nm                                        AS sender_region_nm,
+        t.sender_region_dtl_cd                                         AS sender_region_dtl_cd,
+        c_sregion_dtl.code_nm                                    AS sender_region_dtl_nm,
+
+        t.sender_address,
+        t.sender_tel_no,
+        t.sender_manager_tel_no,
+        t.sender_manager_nm,
+        t.sender_rmk,
+        t.charge_cd,
+
+        /* ====== 합계 ====== */
+        COALESCE(da.sum_sender_amount,   0) AS total_sender_amount,
+        COALESCE(da.sum_receiver_amount, 0) AS total_receiver_amount,
+
+
+        /* 통신거래일때에는 발신처, 택배거래일때는 요금구분값에 따라 합계금액을 가져옴 */
+        CASE
+        WHEN da.cnt_sender  > 0 THEN COALESCE(da.sum_sender_amount,   0)
+        WHEN da.cnt_receiver > 0 THEN COALESCE(da.sum_receiver_amount, 0)
+        ELSE 0
+        END AS total_amount
+
+        FROM transport t
+
+        /* === 회사 조인: receiver === */
+        INNER JOIN company c
+        ON t.receiver_company_id = c.company_id
+
+        /* === 회사 조인: sender 추가 === */
+        INNER JOIN company cs
+        ON t.sender_company_id = cs.company_id
+
+        /* === shipper(구독) 기준: receiver === */
+        LEFT JOIN shipper s
+        ON c.shipper_yn = 'Y'
+        AND c.company_id = s.company_id
+
+        /* === 코드명 조인: receiver === */
+        LEFT JOIN code_region     c_rregion
+        ON c_rregion.code_val     = t.receiver_region_cd
+        LEFT JOIN code_region_dtl c_rregion_dtl
+        ON c_rregion_dtl.code_val = t.receiver_region_dtl_cd
+
+        /* === 코드명 조인: sender 추가 === */
+        LEFT JOIN code_region     c_sregion
+        ON c_sregion.code_val     = t.sender_region_cd
+        LEFT JOIN code_region_dtl c_sregion_dtl
+        ON c_sregion_dtl.code_val = t.sender_region_dtl_cd
+
+        /* === shipper 코드명: receiver === */
+        LEFT JOIN code_shipper    c_receiver_shipper
+        ON c_receiver_shipper.code_val =
+        (CASE WHEN c.shipper_yn = 'Y' THEN s.shipper_cd ELSE 'DLV' END)
+
+        /* === shipper 코드명: sender 추가 === */
+        LEFT JOIN shipper ss
+        ON cs.shipper_yn = 'Y'
+        AND cs.company_id = ss.company_id
+        LEFT JOIN code_shipper    c_sender_shipper
+        ON c_sender_shipper.code_val =
+        (CASE WHEN cs.shipper_yn = 'Y' THEN ss.shipper_cd ELSE 'DLV' END)
+
+        /* === 상세 합계 조인 === */
+        LEFT JOIN dtl_agg da
+        ON da.transport_id = t.transport_id
+
+        WHERE t.del_yn = 'N'
+        <if test="senderCompanyId != null">
+            AND t.sender_company_id = #{senderCompanyId}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            <![CDATA[
+      AND t.shipment_operation_date >= #{startDate}
+    ]]>
+        </if>
+        <if test="endDate != null and endDate != ''">
+            <![CDATA[
+      AND t.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+    ]]>
+        </if>
+        <if test="shipmentOperationDate != null and shipmentOperationDate != ''">
+            AND t.shipment_operation_date = #{shipmentOperationDate}
+        </if>
+        ORDER BY t.shipment_operation_date DESC
+    </select>
+
+
+    <select id="selectSenderTransportList" resultType="com.jeil.delivery.deliverylogic.domain.TransportVO">
+        WITH
+        /* 코드 CTE */
+        code_region AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_TYPE' AND del_yn = 'N'
+        ),
+        code_region_dtl AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_DTL_TYPE' AND del_yn = 'N'
+        ),
+        code_shipper AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'SHIPPER_TYPE' AND del_yn = 'N'
+        ),
+        dtl_agg AS (
+        SELECT
+        td.transport_id,
+        /* SENDER 금액 합계 */
+        SUM(CASE WHEN td.sender_receiver_cd = 'SENDER'
+        THEN COALESCE(td.amount, 0) ELSE 0 END) AS sum_sender_amount,
+        /* RECEIVER 금액 합계 */
+        SUM(CASE WHEN td.sender_receiver_cd = 'RECEIVER'
+        THEN COALESCE(td.amount, 0) ELSE 0 END) AS sum_receiver_amount
+        FROM transport_dtl td
+        WHERE td.del_yn = 'N'
+        AND td.calculation_cd = 'WEIGHT'
+        <if test="startDate != null and startDate != ''">
+            <![CDATA[
+        AND td.shipment_operation_date >= #{startDate}
+      ]]>
+        </if>
+        <if test="endDate != null and endDate != ''">
+            <![CDATA[
+        AND td.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+      ]]>
+        </if>
+        GROUP BY td.transport_id
+        )
+
+        SELECT
+        /* ===== 공통(트랜스포트 메타) ===== */
+        t.transport_id,
+        t.shipment_operation_date,
+        t.reg_id, t.reg_dt, t.chg_id, t.chg_dt, t.del_yn,
+
+        /* ====== RECEIVER(수신처) 영역 ====== */
+        t.receiver_company_id,
+        t.receiver_company_nm,
+        t.receiver_transport_shipper_cd,
+        c_receiver_shipper.code_nm                               AS receiver_transport_shipper_nm,
+
+        t.receiver_region_cd                                     AS receiver_region_cd,
+        c_rregion.code_nm                                        AS receiver_region_nm,
+        t.receiver_region_dtl_cd                                 AS receiver_region_dtl_cd,
+        c_rregion_dtl.code_nm                                    AS receiver_region_dtl_nm,
+
+        t.receiver_address,
+        t.receiver_tel_no,
+        t.receiver_manager_tel_no,
+        t.receiver_manager_nm,
+        t.receiver_rmk,
+
+        s.bill_stdr_cd,                                          -- 수신 회사
+        ss.bill_stdr_cd,                                         -- 발신 회사
+        s.untpc            AS receiver_untpc,
+        s.weight_untpc     AS receiver_weight_untpc,
+        ss.untpc           AS sender_untpc,
+        ss.weight_untpc    AS sender_weight_untpc,
+
+        /* ====== SENDER(발신처) 영역 ====== */
+        t.sender_company_id,
+        t.sender_company_nm,
+        t.sender_transport_shipper_cd,
+        c_sender_shipper.code_nm                                 AS sender_transport_shipper_nm,
+
+        t.sender_region_cd                                       AS sender_region_cd,
+        c_sregion.code_nm                                        AS sender_region_nm,
+        t.sender_region_dtl_cd                                   AS sender_region_dtl_cd,
+        c_sregion_dtl.code_nm                                    AS sender_region_dtl_nm,
+
+        t.sender_address,
+        t.sender_tel_no,
+        t.sender_manager_tel_no,
+        t.sender_manager_nm,
+        t.sender_rmk,
+        t.charge_cd,
+
+        /* ====== 합계 ====== */
+        COALESCE(da.sum_sender_amount,   0) AS total_sender_amount,
+        COALESCE(da.sum_receiver_amount, 0) AS total_receiver_amount
+
+        FROM transport t
+
+        /* === 회사 조인: receiver === */
+        INNER JOIN company c
+        ON t.receiver_company_id = c.company_id
+
+        /* === 회사 조인: sender === */
+        INNER JOIN company cs
+        ON t.sender_company_id = cs.company_id
+
+        /* === shipper(구독) 기준: receiver === */
+        LEFT JOIN shipper s
+        ON c.shipper_yn = 'Y'
+        AND c.company_id = s.company_id
+
+        /* === 코드명 조인: receiver === */
+        LEFT JOIN code_region     c_rregion
+        ON c_rregion.code_val     = t.receiver_region_cd
+        LEFT JOIN code_region_dtl c_rregion_dtl
+        ON c_rregion_dtl.code_val = t.receiver_region_dtl_cd
+
+        /* === 코드명 조인: sender === */
+        LEFT JOIN code_region     c_sregion
+        ON c_sregion.code_val     = t.sender_region_cd
+        LEFT JOIN code_region_dtl c_sregion_dtl
+        ON c_sregion_dtl.code_val = t.sender_region_dtl_cd
+
+        /* === shipper 코드명: receiver === */
+        LEFT JOIN code_shipper c_receiver_shipper
+        ON c_receiver_shipper.code_val =
+        (CASE WHEN c.shipper_yn = 'Y' THEN s.shipper_cd ELSE 'DLV' END)
+
+        /* === shipper 코드명: sender === */
+        LEFT JOIN shipper ss
+        ON cs.shipper_yn = 'Y'
+        AND cs.company_id = ss.company_id
+        LEFT JOIN code_shipper c_sender_shipper
+        ON c_sender_shipper.code_val =
+        (CASE WHEN cs.shipper_yn = 'Y' THEN ss.shipper_cd ELSE 'DLV' END)
+
+        /* === 상세 합계 조인 (WEIGHT 조건 반영된 합계) === */
+        LEFT JOIN dtl_agg da
+        ON da.transport_id = t.transport_id
+
+        WHERE t.del_yn = 'N'
+        <if test="receiverCompanyId != null">
+            AND t.receiver_company_id = #{receiverCompanyId}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            <![CDATA[
+      AND t.shipment_operation_date >= #{startDate}
+    ]]>
+        </if>
+        <if test="endDate != null and endDate != ''">
+            <![CDATA[
+      AND t.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+    ]]>
+        </if>
+
+        /* === transport_dtl 에 WEIGHT 라인이 '존재'하는 건만 === */
+        AND EXISTS (
+        SELECT 1
+        FROM transport_dtl td
+        WHERE td.transport_id   = t.transport_id
+        AND td.del_yn         = 'N'
+        AND td.calculation_cd = 'WEIGHT'
+        <if test="startDate != null and startDate != ''">
+            <![CDATA[
+        AND td.shipment_operation_date >= #{startDate}
+      ]]>
+        </if>
+        <if test="endDate != null and endDate != ''">
+            <![CDATA[
+        AND td.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+      ]]>
+        </if>
+        )
+
+        ORDER BY t.shipment_operation_date DESC
+    </select>
+
+
+
+    <select id="selectTransportListByCompanyId"
+            resultType="com.jeil.delivery.deliverylogic.domain.TransportVO">
+        WITH
+        /* 코드 CTE */
+        code_charge AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'CHARGE' AND del_yn = 'N'
+        ),
+        code_region AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_TYPE' AND del_yn = 'N'
+        ),
+        code_region_dtl AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_DTL_TYPE' AND del_yn = 'N'
+        ),
+        code_shipper AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'SHIPPER_TYPE' AND del_yn = 'N'
+        )
+
+        SELECT
+        /* transport 헤더 */
+        t.transport_id,
+        t.charge_cd,
+        t.shipment_operation_date,
+        t.del_yn,
+        t.reg_id,
+        t.reg_dt,
+        t.chg_id,
+        t.chg_dt,
+
+        /* Sender */
+        t.sender_company_id,
+        COALESCE(t.sender_company_nm, sc.company_nm)        AS sender_company_nm,
+        t.sender_region_cd,
+        c_sregion.code_nm                                   AS sender_region_nm,
+        t.sender_region_dtl_cd,
+        c_sregion_dtl.code_nm                               AS sender_region_dtl_nm,
+        dr.delivery_route_nm                              AS sender_delivery_route_nm,
+        t.sender_address,
+        t.sender_tel_no,
+        t.sender_manager_tel_no,
+        <!-- 연속 저장 모드일 때는 transport 테이블의 값 사용, 아니면 company 기본값 사용 -->
+        <choose>
+            <when test="continueMode != null and continueMode == 'true'">
+                t.sender_manager_nm,
+                t.sender_rmk,
+            </when>
+            <otherwise>
+                sc.manager_nm as sender_manager_nm,
+                sc.rmk as sender_rmk,
+            </otherwise>
+        </choose>
+
+        /* sender_shipper_cd (회사 shipper_yn=Y면 shipper 테이블, 아니면 DLV) */
+        (CASE WHEN sc.shipper_yn = 'Y' THEN ssp.shipper_cd ELSE 'DLV' END) AS sender_transport_shipper_cd,
+        c_sender_shipper.code_nm                                          AS sender_transport_shipper_nm,
+
+        /* Receiver */
+        t.receiver_company_id,
+        COALESCE(t.receiver_company_nm, rc.company_nm)      AS receiver_company_nm,
+        t.receiver_region_cd,
+        c_rregion.code_nm                                   AS receiver_region_nm,
+        t.receiver_region_dtl_cd,
+        c_rregion_dtl.code_nm                               AS receiver_region_dtl_nm,
+        dr2.delivery_route_nm                              AS receiver_delivery_route_nm,
+        t.receiver_address,
+        t.receiver_tel_no,
+        t.receiver_manager_tel_no,
+        t.receiver_manager_nm,
+        t.receiver_rmk,
+
+        /* receiver_shipper_cd */
+        (CASE WHEN rc.shipper_yn = 'Y' THEN rsp.shipper_cd ELSE 'DLV' END) AS receiver_transport_shipper_cd,
+        c_receiver_shipper.code_nm                                        AS receiver_transport_shipper_nm,
+        ssp.untpc as sender_untpc,
+        ssp.weight_untpc as sender_weight_untpc
+        FROM transport t
+
+        /* 회사/shipper */
+        LEFT JOIN company sc
+        ON t.sender_company_id = sc.company_id AND sc.del_yn = 'N'
+        LEFT JOIN company rc
+        ON t.receiver_company_id = rc.company_id AND rc.del_yn = 'N'
+        LEFT JOIN shipper ssp
+        ON sc.company_id = ssp.company_id AND ssp.del_yn = 'N'
+        LEFT JOIN shipper rsp
+        ON rc.company_id = rsp.company_id AND rsp.del_yn = 'N'
+
+        /* 배송경로 (필요 시) */
+        LEFT JOIN company_delivery_route cdr
+        ON cdr.company_id = sc.company_id AND cdr.del_yn = 'N'
+        LEFT JOIN delivery_route dr
+        ON dr.delivery_route_id = cdr.delivery_route_id AND dr.del_yn = 'N'
+
+        LEFT JOIN company_delivery_route cdr2
+        ON cdr2.company_id = rc.company_id AND cdr2.del_yn = 'N'
+        LEFT JOIN delivery_route dr2
+        ON dr2.delivery_route_id = cdr2.delivery_route_id AND dr2.del_yn = 'N'
+
+        /* 코드 조인 */
+        LEFT JOIN code_charge     c_charge      ON c_charge.code_val      = t.charge_cd
+        LEFT JOIN code_region     c_sregion     ON c_sregion.code_val     = t.sender_region_cd
+        LEFT JOIN code_region_dtl c_sregion_dtl ON c_sregion_dtl.code_val = t.sender_region_dtl_cd
+        LEFT JOIN code_region     c_rregion     ON c_rregion.code_val     = t.receiver_region_cd
+        LEFT JOIN code_region_dtl c_rregion_dtl ON c_rregion_dtl.code_val = t.receiver_region_dtl_cd
+
+        /* shipper_nm 매핑 ('DLV' 포함) */
+        LEFT JOIN code_shipper    c_sender_shipper
+        ON c_sender_shipper.code_val =
+        (CASE WHEN sc.shipper_yn = 'Y' THEN ssp.shipper_cd ELSE 'DLV' END)
+        LEFT JOIN code_shipper    c_receiver_shipper
+        ON c_receiver_shipper.code_val =
+        (CASE WHEN rc.shipper_yn = 'Y' THEN rsp.shipper_cd ELSE 'DLV' END)
+
+        WHERE t.del_yn = 'N'
+        <!-- 기간: 등록일 기준 -->
+        <if test="startDate != null and startDate != ''">
+            <![CDATA[
+      AND t.shipment_operation_date >= #{startDate}
+    ]]>
+        </if>
+        <if test="endDate != null and endDate != ''">
+            <![CDATA[
+      AND t.shipment_operation_date <  to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+    ]]>
+        </if>
+        <if test="senderCompanyId != null">
+            AND t.sender_company_id = #{senderCompanyId}
+        </if>
+        <if test="receiverCompanyId != null">
+            AND t.receiver_company_id = #{receiverCompanyId}
+        </if>
+        ORDER BY t.shipment_operation_date DESC, t.transport_id DESC
+        LIMIT 1
+    </select>
+
+
+    <select id="selectTransportListById"
+            resultType="com.jeil.delivery.deliverylogic.domain.TransportVO">
+        WITH
+        /* 코드 CTE */
+        code_charge AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'CHARGE' AND del_yn = 'N'
+        ),
+        code_region AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_TYPE' AND del_yn = 'N'
+        ),
+        code_region_dtl AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'REGION_DTL_TYPE' AND del_yn = 'N'
+        ),
+        code_shipper AS (
+        SELECT code_val, code_nm FROM code
+        WHERE type = 'SHIPPER_TYPE' AND del_yn = 'N'
+        )
+
+        SELECT
+        /* transport 헤더 */
+        t.transport_id,
+        t.charge_cd,
+        t.shipment_operation_date,
+        t.del_yn,
+        t.reg_id,
+        t.reg_dt,
+        t.chg_id,
+        t.chg_dt,
+
+        /* Sender */
+        t.sender_company_id,
+        COALESCE(t.sender_company_nm, sc.company_nm)        AS sender_company_nm,
+        t.sender_region_cd,
+        c_sregion.code_nm                                   AS sender_region_nm,
+        t.sender_region_dtl_cd,
+        c_sregion_dtl.code_nm                               AS sender_region_dtl_nm,
+        dr.delivery_route_nm                              AS sender_delivery_route_nm,
+        t.sender_address,
+        t.sender_tel_no,
+        t.sender_manager_tel_no,
+        t.sender_manager_nm,
+        t.sender_rmk,
+
+        /* sender_shipper_cd (회사 shipper_yn=Y면 shipper 테이블, 아니면 DLV) */
+        (CASE WHEN sc.shipper_yn = 'Y' THEN ssp.shipper_cd ELSE 'DLV' END) AS sender_transport_shipper_cd,
+        c_sender_shipper.code_nm                                          AS sender_transport_shipper_nm,
+
+        /* Receiver */
+        t.receiver_company_id,
+        COALESCE(t.receiver_company_nm, rc.company_nm)      AS receiver_company_nm,
+        t.receiver_region_cd,
+        c_rregion.code_nm                                   AS receiver_region_nm,
+        t.receiver_region_dtl_cd,
+        c_rregion_dtl.code_nm                               AS receiver_region_dtl_nm,
+        t.receiver_address,
+        t.receiver_tel_no,
+        t.receiver_manager_tel_no,
+        t.receiver_manager_nm,
+        t.receiver_rmk,
+
+        /* receiver_shipper_cd */
+        (CASE WHEN rc.shipper_yn = 'Y' THEN rsp.shipper_cd ELSE 'DLV' END) AS receiver_transport_shipper_cd,
+        c_receiver_shipper.code_nm                                        AS receiver_transport_shipper_nm,
+        ssp.untpc as sender_untpc,
+        ssp.weight_untpc as sender_weight_untpc
+        FROM transport t
+
+        /* 회사/shipper */
+        LEFT JOIN company sc
+        ON t.sender_company_id = sc.company_id AND sc.del_yn = 'N'
+        LEFT JOIN company rc
+        ON t.receiver_company_id = rc.company_id AND rc.del_yn = 'N'
+        LEFT JOIN shipper ssp
+        ON sc.company_id = ssp.company_id AND ssp.del_yn = 'N'
+        LEFT JOIN shipper rsp
+        ON rc.company_id = rsp.company_id AND rsp.del_yn = 'N'
+
+        /* 배송경로 (필요 시) */
+        LEFT JOIN company_delivery_route cdr
+        ON cdr.company_id = sc.company_id AND cdr.del_yn = 'N'
+        LEFT JOIN delivery_route dr
+        ON dr.delivery_route_id = cdr.delivery_route_id AND dr.del_yn = 'N'
+
+        /* 코드 조인 */
+        LEFT JOIN code_charge     c_charge      ON c_charge.code_val      = t.charge_cd
+        LEFT JOIN code_region     c_sregion     ON c_sregion.code_val     = t.sender_region_cd
+        LEFT JOIN code_region_dtl c_sregion_dtl ON c_sregion_dtl.code_val = t.sender_region_dtl_cd
+        LEFT JOIN code_region     c_rregion     ON c_rregion.code_val     = t.receiver_region_cd
+        LEFT JOIN code_region_dtl c_rregion_dtl ON c_rregion_dtl.code_val = t.receiver_region_dtl_cd
+
+        /* shipper_nm 매핑 ('DLV' 포함) */
+        LEFT JOIN code_shipper    c_sender_shipper
+        ON c_sender_shipper.code_val =
+        (CASE WHEN sc.shipper_yn = 'Y' THEN ssp.shipper_cd ELSE 'DLV' END)
+        LEFT JOIN code_shipper    c_receiver_shipper
+        ON c_receiver_shipper.code_val =
+        (CASE WHEN rc.shipper_yn = 'Y' THEN rsp.shipper_cd ELSE 'DLV' END)
+
+        WHERE t.del_yn = 'N'
+        <!-- 기간: 등록일 기준 -->
+        AND t.transport_id = #{transportId}
+    </select>
+
+    <!-- 배송현황 엑셀 조회 -->
+    <select id="selectDeliveryStatusList" resultType="com.jeil.delivery.deliverylogic.domain.DeliveryStausExcelDTO">
+    	/* selectDeliveryStatusList */
+		WITH
+		  code_charge AS (
+		    SELECT code_val, code_nm
+		    FROM code
+		    WHERE type = 'CHARGE' AND del_yn = 'N'
+		  ),
+		  code_kind AS (
+		    SELECT code_val, code_nm
+		    FROM code
+		    WHERE type = 'KIND_TYPE' AND del_yn = 'N'
+		  ),
+		  code_region AS (
+		    SELECT code_val, code_nm
+		    FROM code
+		    WHERE type = 'REGION_TYPE' AND del_yn = 'N'
+		  ),
+		  code_region_dtl AS (
+		    SELECT code_val, code_nm
+		    FROM code
+		    WHERE type = 'REGION_DTL_TYPE' AND del_yn = 'N'
+		  )
+		SELECT
+		  CASE
+		    WHEN trd.calculation_cd = 'QTY' THEN '택배'
+		    WHEN trd.calculation_cd = 'WEIGHT' THEN '통신화주'
+		  END AS transport_gubun
+		  , tr.shipment_operation_date
+		  , sr.code_nm AS sender_region_nm
+		  , sen_dr.delivery_route_nm AS sender_delivery_route_nm
+		  , tr.sender_company_nm AS calculation_company_nm
+		  , trd.waybill_no
+		  , tr.sender_company_nm
+		  , co.code_nm AS charge_nm
+		  , CASE WHEN trd.calculation_cd = 'QTY' THEN trd.qty ELSE 0 END AS qty
+		  , CASE WHEN trd.calculation_cd = 'QTY' THEN trd.untpc ELSE 0 END AS untpc
+		  , CASE WHEN trd.calculation_cd = 'QTY' THEN trd.amount ELSE 0 END AS amount
+		  , CASE WHEN trd.calculation_cd = 'WEIGHT' THEN trd.qty ELSE 0 END AS weight_qty
+		  , CASE WHEN trd.calculation_cd = 'WEIGHT' THEN trd.untpc ELSE 0 END AS weight_untpc
+		  , CASE WHEN trd.calculation_cd = 'WEIGHT' THEN trd.amount ELSE 0 END AS weight_amount
+		  , tr.sender_rmk
+		  , CONCAT(rr.code_nm, ' > ', rrd.code_nm) AS rec_region_nm
+		  , tr.receiver_company_nm
+		  , tr.receiver_tel_no
+		  , tr.receiver_manager_tel_no
+		  , ck.code_nm AS kind_nm
+		  , tr.sender_manager_nm
+		  , rec_dr.delivery_route_nm
+		  , tr.receiver_rmk
+		  , tr.receiver_address
+		FROM
+			transport tr
+		INNER JOIN transport_dtl trd ON
+			trd.transport_id = tr.transport_id
+			AND trd.del_yn = 'N'
+		LEFT JOIN code_region sr ON
+			sr.code_val = tr.sender_region_cd
+		LEFT JOIN code co ON
+			co.code_val = tr.charge_cd
+			AND co."type" = 'CHARGE'
+			AND co.del_yn = 'N'
+		LEFT JOIN company rec_com ON
+			rec_com.company_id = tr.receiver_company_id
+			AND rec_com.del_yn = 'N'
+		LEFT JOIN code_region rr ON
+			rr.code_val = tr.receiver_region_cd
+		LEFT JOIN code_region_dtl rrd ON
+			rrd.code_val = tr.receiver_region_dtl_cd
+		LEFT JOIN code_kind ck ON
+			ck.code_val = trd.kind_cd
+		LEFT JOIN company_delivery_route sen_cdr ON
+			sen_cdr.company_id = tr.sender_company_id
+			AND sen_cdr.del_yn = 'N'
+		LEFT JOIN delivery_route sen_dr ON
+			sen_dr.delivery_route_id = sen_cdr.delivery_route_id
+			AND sen_dr.del_yn = 'N'
+		LEFT JOIN company_delivery_route rec_cdr ON
+			rec_cdr.company_id = tr.receiver_company_id
+			AND rec_cdr.del_yn = 'N'
+		LEFT JOIN delivery_route rec_dr ON
+			rec_dr.delivery_route_id = rec_cdr.delivery_route_id
+			AND rec_dr.del_yn = 'N'
+		WHERE
+			tr.del_yn = 'N'
+			<if test="startDate != null and startDate != ''">
+			 	<![CDATA[
+				AND tr.shipment_operation_date >= #{startDate}
+				AND trd.shipment_operation_date >= #{startDate}
+				]]>
+			</if>
+
+			<if test="endDate != null and endDate != ''">
+				<![CDATA[
+				AND tr.shipment_operation_date < to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+				AND trd.shipment_operation_date < to_char(to_date(#{endDate}, 'YYYY-MM-DD') + INTERVAL '1 day', 'YYYY-MM-DD')
+				]]>
+			</if>
+            <!-- 배송경로 필터 -->
+            <if test="deliveryRouteId != null and deliveryRouteId != 0">
+                AND sen_dr.delivery_route_id = #{deliveryRouteId}
+            </if>
+            <!-- 🔍 발신처: 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+            <if test="senderCompanyNm != null and senderCompanyNm != ''">
+                AND (
+                COALESCE(tr.sender_company_nm, '') ILIKE CONCAT('%', #{senderCompanyNm}, '%')
+                OR (
+                LENGTH(regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')) = 4
+                AND (
+                RIGHT(regexp_replace(COALESCE(tr.sender_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')
+                OR
+                RIGHT(regexp_replace(COALESCE(tr.sender_manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{senderCompanyNm}, '[^0-9]', '', 'g')
+                )
+                )
+                )
+            </if>
+
+            <!-- 🔍 수신처: 업체명 OR (전화번호 뒤 4자리, 4자리 입력 전제) -->
+            <if test="receiverCompanyNm != null and receiverCompanyNm != ''">
+                AND (
+                COALESCE(tr.receiver_company_nm, '') ILIKE CONCAT('%', #{receiverCompanyNm}, '%')
+                OR (
+                LENGTH(regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')) = 4
+                AND (
+                RIGHT(regexp_replace(COALESCE(tr.receiver_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')
+                OR
+                RIGHT(regexp_replace(COALESCE(tr.receiver_manager_tel_no, ''), '[^0-9]', '', 'g'), 4)
+                = regexp_replace(#{receiverCompanyNm}, '[^0-9]', '', 'g')
+                )
+                )
+                )
+            </if>
+            <if test="chargeCd  != null and chargeCd != ''">
+                AND tr.charge_cd = #{chargeCd}
+            </if>
+            <if test="senderRegionCd  != null and senderRegionCd != ''">
+                AND tr.sender_region_cd = #{senderRegionCd}
+            </if>
+            <if test="receiverRegionCd  != null and receiverRegionCd != ''">
+                AND tr.receiver_region_cd = #{receiverRegionCd}
+            </if>
+            <if test="waybillNo != null and waybillNo != ''">
+                AND trd.waybill_no LIKE CONCAT('%', #{waybillNo}, '%')
+            </if>
+            <if test="calculationCd  != null and calculationCd != ''">
+                AND trd.calculation_cd = #{calculationCd}
+            </if>
+		ORDER BY
+			tr.shipment_operation_date DESC, tr.receiver_company_id ASC
+			, tr.reg_dt DESC, tr.transport_id DESC
+    </select>
+
+
+    <update id="delete">
+        UPDATE transport
+        SET del_yn = 'Y',
+            chg_id = #{chgId},
+            chg_dt = now()
+        WHERE transport_id = #{transportId};
+    </update>
+</mapper>
