@@ -23,28 +23,20 @@
 | 도메인 | 운송정보 입력 / 정산 / 청구서 관리 |
 
 **비즈니스 프로세스**
-운송 요청 접수 → 운송정보 등록 → 배송 진행 → 월말 정산 → 업체별 청구서 발행 및 메일 발송
 
----
-
-## 요구사항
-
-- Java 17
-- Gradle (또는 내장된 gradlew 사용)
-- PostgreSQL
-
----
-
-## 실행 방법
-
-```bash
-git clone https://github.com/OhGwonSik/jeilsa-back.git
-cd jeilsa-back
-
-# application.properties.example을 참고하여 application.properties 생성 후 값 입력
-
-./gradlew bootRun
+```mermaid
+flowchart LR
+    A[운송 요청 접수] --> B[운송정보 등록] --> C[배송 진행] --> D[월말 정산] --> E[업체별 청구서 발행<br/>및 메일 발송]
 ```
+
+---
+
+## 참고 사항
+
+- 이 저장소는 포트폴리오 목적으로 코드 구조와 구현 내용을 공개합니다.
+- 실제 운영 환경과 분리되어 있고, DB 스키마/데이터가 포함되어 있지 않아 별도 환경 구성 없이는 직접 실행할 수 없습니다.
+- 빌드 환경(참고): Java 17, Spring Boot 3.4.7, Gradle, PostgreSQL
+- DB 접속정보, JWT 시크릿키 등 민감한 설정값은 `application.properties`에서 관리되며, 보안상 저장소에는 포함하지 않았습니다.
 
 ---
 
@@ -52,12 +44,11 @@ cd jeilsa-back
 
 ### 인증/인가
 - JWT AccessToken / RefreshToken 이중 구조 직접 설계 및 구현
-- Spring Security 기반 권한 체크 (`@PreAuthorize + permissionHelper`)
-- TransactionAOP - 읽기/쓰기 트랜잭션 분리 (readOnly, REQUIRES_NEW)
+- TransactionAOP - 메서드 이름 패턴(select/get/search/find/count → readOnly, 나머지 → REQUIRES_NEW) 기반 읽기/쓰기 트랜잭션 분리
 
 ### 운송 기능
 - 운송정보 입력 / 배송코스 관리 / 운송장 선등록 / 화주별 정산
-- 배송체크 엑셀 다운로드
+- 배송체크 엑셀 다운로드 (현업 요청으로 추가)
 
 ### 정산/청구 기능
 - 청구서 등록 / 재계산 / PDF 출력 (Jasper Reports)
@@ -74,6 +65,8 @@ cd jeilsa-back
 ## 트러블슈팅
 
 ### 정산 쿼리 성능 저하 (5~10분 → 1~3분)
+> 월말 정산 시, 개발 환경과 실 데이터 양 차이로 응답이 5~10분까지 지연 → 인덱스 추가 및 CTE MATERIALIZED/DISTINCT ON 최적화로 1~3분까지 단축
+
 - **문제**: 개발 환경과 실 데이터 양 차이로 오픈 후 성능 저하 발생
 - **원인 파악**: EXPLAIN 실행계획 분석으로 병목 구간 파악
 - **해결**:
@@ -82,36 +75,16 @@ cd jeilsa-back
 - **결과**: 5~10분 → 1~3분으로 단축
 
 ### 운영 서버 다운
+> 운영 중 서버가 갑자기 다운됐으나 인프라 지식이 부족한 상태 → 도커 컨테이너/로그 용량 초과를 확인하고 Logback rolling policy 적용으로 재발 없이 안정화
+
 - **문제**: 운영 서버 갑자기 다운, 인프라 지식 부족한 상태
 - **원인 파악**: 도커 컨테이너 및 로그 용량 초과 확인
 - **해결**: Logback rolling policy 설정으로 로그 용량 관리
 - **결과**: 이후 동일 장애 재발 없음
 
 ### 청구서 메일 자동 발송 구조 개선
+> 청구서 등록 시 자동 발송하도록 설계했으나 재정산 케이스에서 오발송 우려 발생 → 재정산 완료 후 수동 발송 버튼 방식으로 변경해 오발송 문제 방지
+
 - **문제**: 청구서 등록 시 자동 발송으로 설계했으나 재정산 케이스 발생
 - **해결**: 재정산 완료 후 수동 버튼 발송 방식으로 변경 제안 및 적용
 - **결과**: 재정산 후 잘못된 청구서 발송 문제 방지
-
----
-
-## 환경 설정
-
-민감 정보(DB 접속 정보, JWT 시크릿키 등)는 `application.properties`에 관리되며 별도 제공되지 않습니다.
-
-`application.properties.example` 파일을 참고하여 환경에 맞게 설정하세요.
-
-```properties
-# DB
-spring.datasource.hikari.jdbc-url=jdbc:postgresql://localhost:5432/jeilsa
-spring.datasource.hikari.username=
-spring.datasource.hikari.password=
-
-# JWT
-jwt.accessToken=
-jwt.refreshToken=
-
-# Mail
-spring.mail.host=
-spring.mail.username=
-spring.mail.password=
-```
